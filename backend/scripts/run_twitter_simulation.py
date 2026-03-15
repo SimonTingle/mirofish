@@ -168,11 +168,11 @@ class IPCHandler:
             }, f, ensure_ascii=False, indent=2)
     
     def poll_command(self) -> Optional[Dict[str, Any]]:
-        """轮询获取待处理命令"""
+        """Poll for pending commands"""
         if not os.path.exists(self.commands_dir):
             return None
-        
-        # 获取命令文件（按时间排序）
+
+        # Get command files (sorted by time)
         command_files = []
         for filename in os.listdir(self.commands_dir):
             if filename.endswith('.json'):
@@ -191,7 +191,7 @@ class IPCHandler:
         return None
     
     def send_response(self, command_id: str, status: str, result: Dict = None, error: str = None):
-        """发送响应"""
+        """Send response"""
         response = {
             "command_id": command_id,
             "status": status,
@@ -204,7 +204,7 @@ class IPCHandler:
         with open(response_file, 'w', encoding='utf-8') as f:
             json.dump(response, f, ensure_ascii=False, indent=2)
         
-        # 删除命令文件
+        # Delete the command file
         command_file = os.path.join(self.commands_dir, f"{command_id}.json")
         try:
             os.remove(command_file)
@@ -213,54 +213,54 @@ class IPCHandler:
     
     async def handle_interview(self, command_id: str, agent_id: int, prompt: str) -> bool:
         """
-        处理单个Agent采访命令
-        
+        Handle a single Agent interview command.
+
         Returns:
-            True 表示成功，False 表示失败
+            True indicates success, False indicates failure
         """
         try:
-            # 获取Agent
+            # Get Agent
             agent = self.agent_graph.get_agent(agent_id)
-            
-            # 创建Interview动作
+
+            # Create Interview action
             interview_action = ManualAction(
                 action_type=ActionType.INTERVIEW,
                 action_args={"prompt": prompt}
             )
-            
-            # 执行Interview
+
+            # Execute Interview
             actions = {agent: interview_action}
             await self.env.step(actions)
-            
-            # 从数据库获取结果
+
+            # Get result from database
             result = self._get_interview_result(agent_id)
-            
+
             self.send_response(command_id, "completed", result=result)
-            print(f"  Interview完成: agent_id={agent_id}")
+            print(f"  Interview completed: agent_id={agent_id}")
             return True
-            
+
         except Exception as e:
             error_msg = str(e)
-            print(f"  Interview失败: agent_id={agent_id}, error={error_msg}")
+            print(f"  Interview failed: agent_id={agent_id}, error={error_msg}")
             self.send_response(command_id, "failed", error=error_msg)
             return False
     
     async def handle_batch_interview(self, command_id: str, interviews: List[Dict]) -> bool:
         """
-        处理批量采访命令
-        
+        Handle a batch interview command.
+
         Args:
             interviews: [{"agent_id": int, "prompt": str}, ...]
         """
         try:
-            # 构建动作字典
+            # Build action dict
             actions = {}
-            agent_prompts = {}  # 记录每个agent的prompt
-            
+            agent_prompts = {}  # Record each agent's prompt
+
             for interview in interviews:
                 agent_id = interview.get("agent_id")
                 prompt = interview.get("prompt", "")
-                
+
                 try:
                     agent = self.agent_graph.get_agent(agent_id)
                     actions[agent] = ManualAction(
@@ -269,31 +269,31 @@ class IPCHandler:
                     )
                     agent_prompts[agent_id] = prompt
                 except Exception as e:
-                    print(f"  警告: 无法获取Agent {agent_id}: {e}")
-            
+                    print(f"  Warning: unable to get Agent {agent_id}: {e}")
+
             if not actions:
-                self.send_response(command_id, "failed", error="没有有效的Agent")
+                self.send_response(command_id, "failed", error="No valid Agent")
                 return False
-            
-            # 执行批量Interview
+
+            # Execute batch Interview
             await self.env.step(actions)
-            
-            # 获取所有结果
+
+            # Get all results
             results = {}
             for agent_id in agent_prompts.keys():
                 result = self._get_interview_result(agent_id)
                 results[agent_id] = result
-            
+
             self.send_response(command_id, "completed", result={
                 "interviews_count": len(results),
                 "results": results
             })
-            print(f"  批量Interview完成: {len(results)} 个Agent")
+            print(f"  Batch Interview completed: {len(results)} agents")
             return True
-            
+
         except Exception as e:
             error_msg = str(e)
-            print(f"  批量Interview失败: {error_msg}")
+            print(f"  Batch Interview failed: {error_msg}")
             self.send_response(command_id, "failed", error=error_msg)
             return False
     
