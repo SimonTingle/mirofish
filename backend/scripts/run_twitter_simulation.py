@@ -298,7 +298,7 @@ class IPCHandler:
             return False
     
     def _get_interview_result(self, agent_id: int) -> Dict[str, Any]:
-        """从数据库获取最新的Interview结果"""
+        """Retrieve the latest Interview result from the database"""
         db_path = os.path.join(self.simulation_dir, "twitter_simulation.db")
         
         result = {
@@ -314,7 +314,7 @@ class IPCHandler:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
-            # 查询最新的Interview记录
+            # Query the latest Interview record
             cursor.execute("""
                 SELECT user_id, info, created_at
                 FROM trace
@@ -336,16 +336,16 @@ class IPCHandler:
             conn.close()
             
         except Exception as e:
-            print(f"  读取Interview结果失败: {e}")
-        
+            print(f"  Failed to read Interview result: {e}")
+
         return result
-    
+
     async def process_commands(self) -> bool:
         """
-        处理所有待处理命令
-        
+        Process all pending commands.
+
         Returns:
-            True 表示继续运行，False 表示应该退出
+            True indicates continue running, False indicates should exit
         """
         command = self.poll_command()
         if not command:
@@ -355,7 +355,7 @@ class IPCHandler:
         command_type = command.get("command_type")
         args = command.get("args", {})
         
-        print(f"\n收到IPC命令: {command_type}, id={command_id}")
+        print(f"\nReceived IPC command: {command_type}, id={command_id}")
         
         if command_type == CommandType.INTERVIEW:
             await self.handle_interview(
@@ -373,19 +373,19 @@ class IPCHandler:
             return True
             
         elif command_type == CommandType.CLOSE_ENV:
-            print("收到关闭环境命令")
-            self.send_response(command_id, "completed", result={"message": "环境即将关闭"})
+            print("Received close environment command")
+            self.send_response(command_id, "completed", result={"message": "Environment is about to close"})
             return False
-        
+
         else:
-            self.send_response(command_id, "failed", error=f"未知命令类型: {command_type}")
+            self.send_response(command_id, "failed", error=f"Unknown command type: {command_type}")
             return True
 
 
 class TwitterSimulationRunner:
-    """Twitter模拟运行器"""
-    
-    # Twitter可用动作（不包含INTERVIEW，INTERVIEW只能通过ManualAction手动触发）
+    """Twitter simulation runner"""
+
+    # Twitter available actions (does not include INTERVIEW; INTERVIEW can only be triggered manually via ManualAction)
     AVAILABLE_ACTIONS = [
         ActionType.CREATE_POST,
         ActionType.LIKE_POST,
@@ -397,11 +397,11 @@ class TwitterSimulationRunner:
     
     def __init__(self, config_path: str, wait_for_commands: bool = True):
         """
-        初始化模拟运行器
-        
+        Initialize the simulation runner.
+
         Args:
-            config_path: 配置文件路径 (simulation_config.json)
-            wait_for_commands: 模拟完成后是否等待命令（默认True）
+            config_path: Path to the config file (simulation_config.json)
+            wait_for_commands: Whether to wait for commands after the simulation completes (default True)
         """
         self.config_path = config_path
         self.config = self._load_config()
@@ -412,12 +412,12 @@ class TwitterSimulationRunner:
         self.ipc_handler = None
         
     def _load_config(self) -> Dict[str, Any]:
-        """加载配置文件"""
+        """Load configuration file"""
         with open(self.config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     
     def _get_profile_path(self) -> str:
-        """获取Profile文件路径（OASIS Twitter使用CSV格式）"""
+        """Get the Profile file path (OASIS Twitter uses CSV format)"""
         return os.path.join(self.simulation_dir, "twitter_profiles.csv")
     
     def _get_db_path(self) -> str:

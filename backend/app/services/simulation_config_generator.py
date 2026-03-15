@@ -252,27 +252,27 @@ class SimulationConfigGenerator:
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ) -> SimulationParameters:
         """
-        智能生成完整的模拟配置（分步生成）
-        
+        Intelligently generate a complete simulation configuration (step-by-step generation)
+
         Args:
-            simulation_id: 模拟ID
-            project_id: 项目ID
-            graph_id: 图谱ID
-            simulation_requirement: 模拟需求描述
-            document_text: 原始文档内容
-            entities: 过滤后的实体列表
-            enable_twitter: 是否启用Twitter
-            enable_reddit: 是否启用Reddit
-            progress_callback: 进度回调函数(current_step, total_steps, message)
-            
+            simulation_id: Simulation ID
+            project_id: Project ID
+            graph_id: Graph ID
+            simulation_requirement: Simulation requirement description
+            document_text: Raw document content
+            entities: Filtered entity list
+            enable_twitter: Whether to enable Twitter
+            enable_reddit: Whether to enable Reddit
+            progress_callback: Progress callback function (current_step, total_steps, message)
+
         Returns:
-            SimulationParameters: 完整的模拟参数
+            SimulationParameters: Complete simulation parameters
         """
-        logger.info(f"开始智能生成模拟配置: simulation_id={simulation_id}, 实体数={len(entities)}")
+        logger.info(f"Starting intelligent simulation config generation: simulation_id={simulation_id}, entities={len(entities)}")
         
-        # 计算总步骤数
+        # Calculate total number of steps
         num_batches = math.ceil(len(entities) / self.AGENTS_PER_BATCH)
-        total_steps = 3 + num_batches  # 时间配置 + 事件配置 + N批Agent + 平台配置
+        total_steps = 3 + num_batches  # time config + event config + N agent batches + platform config
         current_step = 0
         
         def report_progress(step: int, message: str):
@@ -282,7 +282,7 @@ class SimulationConfigGenerator:
                 progress_callback(step, total_steps, message)
             logger.info(f"[{step}/{total_steps}] {message}")
         
-        # 1. 构建基础上下文信息
+        # 1. Build base context information
         context = self._build_context(
             simulation_requirement=simulation_requirement,
             document_text=document_text,
@@ -291,31 +291,31 @@ class SimulationConfigGenerator:
         
         reasoning_parts = []
         
-        # ========== 步骤1: 生成时间配置 ==========
-        report_progress(1, "生成时间配置...")
+        # ========== Step 1: Generate time configuration ==========
+        report_progress(1, "Generating time configuration...")
         num_entities = len(entities)
         time_config_result = self._generate_time_config(context, num_entities)
         time_config = self._parse_time_config(time_config_result, num_entities)
-        reasoning_parts.append(f"时间配置: {time_config_result.get('reasoning', '成功')}")
-        
-        # ========== 步骤2: 生成事件配置 ==========
-        report_progress(2, "生成事件配置和热点话题...")
+        reasoning_parts.append(f"Time config: {time_config_result.get('reasoning', 'success')}")
+
+        # ========== Step 2: Generate event configuration ==========
+        report_progress(2, "Generating event configuration and trending topics...")
         event_config_result = self._generate_event_config(context, simulation_requirement, entities)
         event_config = self._parse_event_config(event_config_result)
-        reasoning_parts.append(f"事件配置: {event_config_result.get('reasoning', '成功')}")
-        
-        # ========== 步骤3-N: 分批生成Agent配置 ==========
+        reasoning_parts.append(f"Event config: {event_config_result.get('reasoning', 'success')}")
+
+        # ========== Steps 3-N: Generate Agent configurations in batches ==========
         all_agent_configs = []
         for batch_idx in range(num_batches):
             start_idx = batch_idx * self.AGENTS_PER_BATCH
             end_idx = min(start_idx + self.AGENTS_PER_BATCH, len(entities))
             batch_entities = entities[start_idx:end_idx]
-            
+
             report_progress(
                 3 + batch_idx,
-                f"生成Agent配置 ({start_idx + 1}-{end_idx}/{len(entities)})..."
+                f"Generating Agent configurations ({start_idx + 1}-{end_idx}/{len(entities)})..."
             )
-            
+
             batch_configs = self._generate_agent_configs_batch(
                 context=context,
                 entities=batch_entities,
@@ -323,17 +323,17 @@ class SimulationConfigGenerator:
                 simulation_requirement=simulation_requirement
             )
             all_agent_configs.extend(batch_configs)
-        
-        reasoning_parts.append(f"Agent配置: 成功生成 {len(all_agent_configs)} 个")
-        
-        # ========== 为初始帖子分配发布者 Agent ==========
-        logger.info("为初始帖子分配合适的发布者 Agent...")
+
+        reasoning_parts.append(f"Agent configs: successfully generated {len(all_agent_configs)}")
+
+        # ========== Assign poster Agents to initial posts ==========
+        logger.info("Assigning suitable poster Agents to initial posts...")
         event_config = self._assign_initial_post_agents(event_config, all_agent_configs)
         assigned_count = len([p for p in event_config.initial_posts if p.get("poster_agent_id") is not None])
-        reasoning_parts.append(f"初始帖子分配: {assigned_count} 个帖子已分配发布者")
-        
-        # ========== 最后一步: 生成平台配置 ==========
-        report_progress(total_steps, "生成平台配置...")
+        reasoning_parts.append(f"Initial post assignment: {assigned_count} posts assigned a poster")
+
+        # ========== Final step: Generate platform configuration ==========
+        report_progress(total_steps, "Generating platform configuration...")
         twitter_config = None
         reddit_config = None
         
@@ -357,7 +357,7 @@ class SimulationConfigGenerator:
                 echo_chamber_strength=0.6
             )
         
-        # 构建最终参数
+        # Build final parameters
         params = SimulationParameters(
             simulation_id=simulation_id,
             project_id=project_id,
@@ -373,7 +373,7 @@ class SimulationConfigGenerator:
             generation_reasoning=" | ".join(reasoning_parts)
         )
         
-        logger.info(f"模拟配置生成完成: {len(params.agent_configs)} 个Agent配置")
+        logger.info(f"Simulation configuration generation complete: {len(params.agent_configs)} Agent configurations")
         
         return params
     
@@ -383,26 +383,26 @@ class SimulationConfigGenerator:
         document_text: str,
         entities: List[EntityNode]
     ) -> str:
-        """构建LLM上下文，截断到最大长度"""
-        
-        # 实体摘要
+        """Build LLM context, truncated to maximum length"""
+
+        # Entity summary
         entity_summary = self._summarize_entities(entities)
-        
-        # 构建上下文
+
+        # Build context
         context_parts = [
-            f"## 模拟需求\n{simulation_requirement}",
-            f"\n## 实体信息 ({len(entities)}个)\n{entity_summary}",
+            f"## Simulation Requirements\n{simulation_requirement}",
+            f"\n## Entity Information ({len(entities)} entities)\n{entity_summary}",
         ]
-        
+
         current_length = sum(len(p) for p in context_parts)
-        remaining_length = self.MAX_CONTEXT_LENGTH - current_length - 500  # 留500字符余量
-        
+        remaining_length = self.MAX_CONTEXT_LENGTH - current_length - 500  # Reserve 500 characters
+
         if remaining_length > 0 and document_text:
             doc_text = document_text[:remaining_length]
             if len(document_text) > remaining_length:
-                doc_text += "\n...(文档已截断)"
-            context_parts.append(f"\n## 原始文档内容\n{doc_text}")
-        
+                doc_text += "\n...(document truncated)"
+            context_parts.append(f"\n## Raw Document Content\n{doc_text}")
+
         return "\n".join(context_parts)
     
     def _summarize_entities(self, entities: List[EntityNode]) -> str:
