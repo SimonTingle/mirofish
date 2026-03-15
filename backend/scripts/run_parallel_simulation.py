@@ -1,62 +1,62 @@
 """
-OASIS 双平台并行模拟预设脚本
-同时运行Twitter和Reddit模拟，读取相同的配置文件
+OASIS Dual-Platform Parallel Simulation Preset Script
+Runs Twitter and Reddit simulations simultaneously, reading the same config file
 
-功能特性:
-- 双平台（Twitter + Reddit）并行模拟
-- 完成模拟后不立即关闭环境，进入等待命令模式
-- 支持通过IPC接收Interview命令
-- 支持单个Agent采访和批量采访
-- 支持远程关闭环境命令
+Features:
+- Dual-platform (Twitter + Reddit) parallel simulation
+- Does not immediately close the environment after simulation; enters command-waiting mode
+- Supports receiving Interview commands via IPC
+- Supports single Agent interviews and batch interviews
+- Supports remote environment close command
 
-使用方式:
+Usage:
     python run_parallel_simulation.py --config simulation_config.json
-    python run_parallel_simulation.py --config simulation_config.json --no-wait  # 完成后立即关闭
+    python run_parallel_simulation.py --config simulation_config.json --no-wait  # close immediately after completion
     python run_parallel_simulation.py --config simulation_config.json --twitter-only
     python run_parallel_simulation.py --config simulation_config.json --reddit-only
 
-日志结构:
+Log structure:
     sim_xxx/
     ├── twitter/
-    │   └── actions.jsonl    # Twitter 平台动作日志
+    │   └── actions.jsonl    # Twitter platform action log
     ├── reddit/
-    │   └── actions.jsonl    # Reddit 平台动作日志
-    ├── simulation.log       # 主模拟进程日志
-    └── run_state.json       # 运行状态（API 查询用）
+    │   └── actions.jsonl    # Reddit platform action log
+    ├── simulation.log       # Main simulation process log
+    └── run_state.json       # Run state (for API queries)
 """
 
 # ============================================================
-# 解决 Windows 编码问题：在所有 import 之前设置 UTF-8 编码
-# 这是为了修复 OASIS 第三方库读取文件时未指定编码的问题
+# Fix Windows encoding issue: set UTF-8 encoding before all imports
+# This is to fix the issue where OASIS third-party libraries read files without specifying encoding
 # ============================================================
 import sys
 import os
 
 if sys.platform == 'win32':
-    # 设置 Python 默认 I/O 编码为 UTF-8
-    # 这会影响所有未指定编码的 open() 调用
+    # Set Python default I/O encoding to UTF-8
+    # This affects all open() calls that do not specify an encoding
     os.environ.setdefault('PYTHONUTF8', '1')
     os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
     
-    # 重新配置标准输出流为 UTF-8（解决控制台中文乱码）
+    # Reconfigure standard output streams to UTF-8 (fix garbled console output)
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     if hasattr(sys.stderr, 'reconfigure'):
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
     
-    # 强制设置默认编码（影响 open() 函数的默认编码）
-    # 注意：这需要在 Python 启动时就设置，运行时设置可能不生效
-    # 所以我们还需要 monkey-patch 内置的 open 函数
+    # Force-set the default encoding (affects the default encoding of the open() function)
+    # Note: This needs to be set at Python startup; setting it at runtime may not take effect
+    # So we also need to monkey-patch the built-in open function
     import builtins
     _original_open = builtins.open
     
     def _utf8_open(file, mode='r', buffering=-1, encoding=None, errors=None, 
                    newline=None, closefd=True, opener=None):
         """
-        包装 open() 函数，对于文本模式默认使用 UTF-8 编码
-        这可以修复第三方库（如 OASIS）读取文件时未指定编码的问题
+        Wrapper for the open() function that defaults to UTF-8 encoding for text mode.
+        This fixes the issue where third-party libraries (such as OASIS) read files without specifying an encoding.
         """
-        # 只对文本模式（非二进制）且未指定编码的情况设置默认编码
+        # Only set the default encoding for text mode (non-binary) when no encoding is specified
         if encoding is None and 'b' not in mode:
             encoding = 'utf-8'
         return _original_open(file, mode, buffering, encoding, errors, 
@@ -77,52 +77,52 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 
-# 全局变量：用于信号处理
+# Global variables: used for signal handling
 _shutdown_event = None
 _cleanup_done = False
 
-# 添加 backend 目录到路径
-# 脚本固定位于 backend/scripts/ 目录
+# Add backend directory to path
+# Script is always located in the backend/scripts/ directory
 _scripts_dir = os.path.dirname(os.path.abspath(__file__))
 _backend_dir = os.path.abspath(os.path.join(_scripts_dir, '..'))
 _project_root = os.path.abspath(os.path.join(_backend_dir, '..'))
 sys.path.insert(0, _scripts_dir)
 sys.path.insert(0, _backend_dir)
 
-# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）
+# Load the .env file from the project root directory (contains LLM_API_KEY and other config)
 from dotenv import load_dotenv
 _env_file = os.path.join(_project_root, '.env')
 if os.path.exists(_env_file):
     load_dotenv(_env_file)
-    print(f"已加载环境配置: {_env_file}")
+    print(f"Loaded environment config: {_env_file}")
 else:
-    # 尝试加载 backend/.env
+    # Try loading backend/.env
     _backend_env = os.path.join(_backend_dir, '.env')
     if os.path.exists(_backend_env):
         load_dotenv(_backend_env)
-        print(f"已加载环境配置: {_backend_env}")
+        print(f"Loaded environment config: {_backend_env}")
 
 
 class MaxTokensWarningFilter(logging.Filter):
-    """过滤掉 camel-ai 关于 max_tokens 的警告（我们故意不设置 max_tokens，让模型自行决定）"""
-    
+    """Filter out camel-ai warnings about max_tokens (we intentionally do not set max_tokens, letting the model decide)"""
+
     def filter(self, record):
-        # 过滤掉包含 max_tokens 警告的日志
+        # Filter out log entries containing max_tokens warnings
         if "max_tokens" in record.getMessage() and "Invalid or missing" in record.getMessage():
             return False
         return True
 
 
-# 在模块加载时立即添加过滤器，确保在 camel 代码执行前生效
+# Add the filter immediately at module load time, ensuring it takes effect before camel code executes
 logging.getLogger().addFilter(MaxTokensWarningFilter())
 
 
 def disable_oasis_logging():
     """
-    禁用 OASIS 库的详细日志输出
-    OASIS 的日志太冗余（记录每个 agent 的观察和动作），我们使用自己的 action_logger
+    Disable verbose log output from the OASIS library.
+    OASIS logs are too verbose (recording each agent's observations and actions); we use our own action_logger instead.
     """
-    # 禁用 OASIS 的所有日志器
+    # Disable all OASIS loggers
     oasis_loggers = [
         "social.agent",
         "social.twitter", 
@@ -133,22 +133,22 @@ def disable_oasis_logging():
     
     for logger_name in oasis_loggers:
         logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.CRITICAL)  # 只记录严重错误
+        logger.setLevel(logging.CRITICAL)  # Only record critical errors
         logger.handlers.clear()
         logger.propagate = False
 
 
 def init_logging_for_simulation(simulation_dir: str):
     """
-    初始化模拟的日志配置
-    
+    Initialize logging configuration for the simulation.
+
     Args:
-        simulation_dir: 模拟目录路径
+        simulation_dir: Path to the simulation directory
     """
-    # 禁用 OASIS 的详细日志
+    # Disable verbose OASIS logging
     disable_oasis_logging()
-    
-    # 清理旧的 log 目录（如果存在）
+
+    # Clean up old log directory (if it exists)
     old_log_dir = os.path.join(simulation_dir, "log")
     if os.path.exists(old_log_dir):
         import shutil
@@ -169,12 +169,12 @@ try:
         generate_reddit_agent_graph
     )
 except ImportError as e:
-    print(f"错误: 缺少依赖 {e}")
-    print("请先安装: pip install oasis-ai camel-ai")
+    print(f"Error: missing dependency {e}")
+    print("Please install first: pip install oasis-ai camel-ai")
     sys.exit(1)
 
 
-# Twitter可用动作（不包含INTERVIEW，INTERVIEW只能通过ManualAction手动触发）
+# Twitter available actions (does not include INTERVIEW; INTERVIEW can only be triggered manually via ManualAction)
 TWITTER_ACTIONS = [
     ActionType.CREATE_POST,
     ActionType.LIKE_POST,
@@ -184,7 +184,7 @@ TWITTER_ACTIONS = [
     ActionType.QUOTE_POST,
 ]
 
-# Reddit可用动作（不包含INTERVIEW，INTERVIEW只能通过ManualAction手动触发）
+# Reddit available actions (does not include INTERVIEW; INTERVIEW can only be triggered manually via ManualAction)
 REDDIT_ACTIONS = [
     ActionType.LIKE_POST,
     ActionType.DISLIKE_POST,
@@ -202,13 +202,13 @@ REDDIT_ACTIONS = [
 ]
 
 
-# IPC相关常量
+# IPC-related constants
 IPC_COMMANDS_DIR = "ipc_commands"
 IPC_RESPONSES_DIR = "ipc_responses"
 ENV_STATUS_FILE = "env_status.json"
 
 class CommandType:
-    """命令类型常量"""
+    """Command type constants"""
     INTERVIEW = "interview"
     BATCH_INTERVIEW = "batch_interview"
     CLOSE_ENV = "close_env"
@@ -216,9 +216,9 @@ class CommandType:
 
 class ParallelIPCHandler:
     """
-    双平台IPC命令处理器
-    
-    管理两个平台的环境，处理Interview命令
+    Dual-platform IPC command handler.
+
+    Manages environments for both platforms and handles Interview commands.
     """
     
     def __init__(
@@ -239,12 +239,12 @@ class ParallelIPCHandler:
         self.responses_dir = os.path.join(simulation_dir, IPC_RESPONSES_DIR)
         self.status_file = os.path.join(simulation_dir, ENV_STATUS_FILE)
         
-        # 确保目录存在
+        # Ensure directories exist
         os.makedirs(self.commands_dir, exist_ok=True)
         os.makedirs(self.responses_dir, exist_ok=True)
-    
+
     def update_status(self, status: str):
-        """更新环境状态"""
+        """Update environment status"""
         with open(self.status_file, 'w', encoding='utf-8') as f:
             json.dump({
                 "status": status,
@@ -254,11 +254,11 @@ class ParallelIPCHandler:
             }, f, ensure_ascii=False, indent=2)
     
     def poll_command(self) -> Optional[Dict[str, Any]]:
-        """轮询获取待处理命令"""
+        """Poll for pending commands"""
         if not os.path.exists(self.commands_dir):
             return None
-        
-        # 获取命令文件（按时间排序）
+
+        # Get command files (sorted by time)
         command_files = []
         for filename in os.listdir(self.commands_dir):
             if filename.endswith('.json'):
@@ -277,7 +277,7 @@ class ParallelIPCHandler:
         return None
     
     def send_response(self, command_id: str, status: str, result: Dict = None, error: str = None):
-        """发送响应"""
+        """Send response"""
         response = {
             "command_id": command_id,
             "status": status,
@@ -290,22 +290,22 @@ class ParallelIPCHandler:
         with open(response_file, 'w', encoding='utf-8') as f:
             json.dump(response, f, ensure_ascii=False, indent=2)
         
-        # 删除命令文件
+        # Delete the command file
         command_file = os.path.join(self.commands_dir, f"{command_id}.json")
         try:
             os.remove(command_file)
         except OSError:
             pass
-    
+
     def _get_env_and_graph(self, platform: str):
         """
-        获取指定平台的环境和agent_graph
-        
+        Get the environment and agent_graph for the specified platform.
+
         Args:
-            platform: 平台名称 ("twitter" 或 "reddit")
-            
+            platform: Platform name ("twitter" or "reddit")
+
         Returns:
-            (env, agent_graph, platform_name) 或 (None, None, None)
+            (env, agent_graph, platform_name) or (None, None, None)
         """
         if platform == "twitter" and self.twitter_env:
             return self.twitter_env, self.twitter_agent_graph, "twitter"
@@ -316,15 +316,15 @@ class ParallelIPCHandler:
     
     async def _interview_single_platform(self, agent_id: int, prompt: str, platform: str) -> Dict[str, Any]:
         """
-        在单个平台上执行Interview
-        
+        Execute an Interview on a single platform.
+
         Returns:
-            包含结果的字典，或包含error的字典
+            A dict containing the result, or a dict containing an error.
         """
         env, agent_graph, actual_platform = self._get_env_and_graph(platform)
         
         if not env or not agent_graph:
-            return {"platform": platform, "error": f"{platform}平台不可用"}
+            return {"platform": platform, "error": f"{platform} platform is unavailable"}
         
         try:
             agent = agent_graph.get_agent(agent_id)
