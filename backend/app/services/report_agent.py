@@ -546,68 +546,68 @@ Workflow:
 
 [Important] Requires the OASIS simulation environment to be running!"""
 
-# ── 大纲规划 prompt ──
+# ── Outline planning prompt ──
 
 PLAN_SYSTEM_PROMPT = """\
-你是一个「未来预测报告」的撰写专家，拥有对模拟世界的「上帝视角」——你可以洞察模拟中每一位Agent的行为、言论和互动。
+You are an expert writer of "Future Prediction Reports" with a "god's-eye view" of the simulated world — you can observe the behavior, speech, and interactions of every Agent in the simulation.
 
-【核心理念】
-我们构建了一个模拟世界，并向其中注入了特定的「模拟需求」作为变量。模拟世界的演化结果，就是对未来可能发生情况的预测。你正在观察的不是"实验数据"，而是"未来的预演"。
+[Core Concept]
+We built a simulated world and injected specific "simulation requirements" as variables. The outcomes of the simulated world's evolution are predictions of what may happen in the future. What you are observing is not "experimental data" but a "rehearsal of the future."
 
-【你的任务】
-撰写一份「未来预测报告」，回答：
-1. 在我们设定的条件下，未来发生了什么？
-2. 各类Agent（人群）是如何反应和行动？
-3. 这个模拟揭示了哪些值得关注的未来趋势和风险？
+[Your Task]
+Write a "Future Prediction Report" that answers:
+1. Under the conditions we set, what happened in the future?
+2. How did various Agents (population groups) react and act?
+3. What future trends and risks worth noting does this simulation reveal?
 
-【报告定位】
-- ✅ 这是一份基于模拟的未来预测报告，揭示"如果这样，未来会怎样"
-- ✅ 聚焦于预测结果：事件走向、群体反应、涌现现象、潜在风险
-- ✅ 模拟世界中的Agent言行就是对未来人群行为的预测
-- ❌ 不是对现实世界现状的分析
-- ❌ 不是泛泛而谈的舆情综述
+[Report Positioning]
+- ✅ This is a simulation-based future prediction report, revealing "if this happens, what will the future look like"
+- ✅ Focus on prediction outcomes: event trajectory, group reactions, emergent phenomena, potential risks
+- ✅ Agent speech and behavior in the simulation world are predictions of future human behavior
+- ❌ Not an analysis of the current real-world situation
+- ❌ Not a generic public opinion overview
 
-【章节数量限制】
-- 最少2个章节，最多5个章节
-- 不需要子章节，每个章节直接撰写完整内容
-- 内容要精炼，聚焦于核心预测发现
-- 章节结构由你根据预测结果自主设计
+[Section Count Limits]
+- Minimum 2 sections, maximum 5 sections
+- No sub-sections needed; each section should be written with complete content
+- Content should be concise, focusing on core prediction findings
+- Section structure is designed by you based on the prediction results
 
-请输出JSON格式的报告大纲，格式如下：
+Output a JSON-formatted report outline as follows:
 {
-    "title": "报告标题",
-    "summary": "报告摘要（一句话概括核心预测发现）",
+    "title": "Report title",
+    "summary": "Report summary (one sentence summarizing the core prediction findings)",
     "sections": [
         {
-            "title": "章节标题",
-            "description": "章节内容描述"
+            "title": "Section title",
+            "description": "Section content description"
         }
     ]
 }
 
-注意：sections数组最少2个，最多5个元素！"""
+Note: The sections array must have at least 2 and at most 5 elements!"""
 
 PLAN_USER_PROMPT_TEMPLATE = """\
-【预测场景设定】
-我们向模拟世界注入的变量（模拟需求）：{simulation_requirement}
+[Prediction Scenario Setup]
+Variables injected into the simulated world (simulation requirements): {simulation_requirement}
 
-【模拟世界规模】
-- 参与模拟的实体数量: {total_nodes}
-- 实体间产生的关系数量: {total_edges}
-- 实体类型分布: {entity_types}
-- 活跃Agent数量: {total_entities}
+[Simulated World Scale]
+- Number of entities participating in simulation: {total_nodes}
+- Number of relationships generated between entities: {total_edges}
+- Entity type distribution: {entity_types}
+- Number of active Agents: {total_entities}
 
-【模拟预测到的部分未来事实样本】
+[Sample Future Facts Predicted by Simulation]
 {related_facts_json}
 
-请以「上帝视角」审视这个未来预演：
-1. 在我们设定的条件下，未来呈现出了什么样的状态？
-2. 各类人群（Agent）是如何反应和行动的？
-3. 这个模拟揭示了哪些值得关注的未来趋势？
+Please examine this future rehearsal from a "god's-eye view":
+1. Under the conditions we set, what state did the future present?
+2. How did various population groups (Agents) react and act?
+3. What future trends worth noting does this simulation reveal?
 
-根据预测结果，设计最合适的报告章节结构。
+Design the most appropriate report section structure based on the prediction results.
 
-【再次提醒】报告章节数量：最少2个，最多5个，内容要精炼聚焦于核心预测发现。"""
+[Reminder] Report section count: minimum 2, maximum 5; content should be concise and focused on core prediction findings."""
 
 # ── 章节生成 prompt ──
 

@@ -585,18 +585,18 @@ class SimulationRunner:
         platform: str
     ) -> int:
         """
-        读取动作日志文件
-        
+        Read an action log file.
+
         Args:
-            log_path: 日志文件路径
-            position: 上次读取位置
-            state: 运行状态对象
-            platform: 平台名称 (twitter/reddit)
-            
+            log_path: Path to the log file
+            position: Last read position
+            state: Run state object
+            platform: Platform name (twitter/reddit)
+
         Returns:
-            新的读取位置
+            New read position
         """
-        # 检查是否启用了图谱记忆更新
+        # Check if graph memory update is enabled
         graph_memory_enabled = cls._graph_memory_enabled.get(state.simulation_id, False)
         graph_updater = None
         if graph_memory_enabled:
@@ -611,36 +611,36 @@ class SimulationRunner:
                         try:
                             action_data = json.loads(line)
                             
-                            # 处理事件类型的条目
+                            # Handle event-type entries
                             if "event_type" in action_data:
                                 event_type = action_data.get("event_type")
-                                
-                                # 检测 simulation_end 事件，标记平台已完成
+
+                                # Detect simulation_end event and mark platform as completed
                                 if event_type == "simulation_end":
                                     if platform == "twitter":
                                         state.twitter_completed = True
                                         state.twitter_running = False
-                                        logger.info(f"Twitter 模拟已完成: {state.simulation_id}, total_rounds={action_data.get('total_rounds')}, total_actions={action_data.get('total_actions')}")
+                                        logger.info(f"Twitter simulation completed: {state.simulation_id}, total_rounds={action_data.get('total_rounds')}, total_actions={action_data.get('total_actions')}")
                                     elif platform == "reddit":
                                         state.reddit_completed = True
                                         state.reddit_running = False
-                                        logger.info(f"Reddit 模拟已完成: {state.simulation_id}, total_rounds={action_data.get('total_rounds')}, total_actions={action_data.get('total_actions')}")
-                                    
-                                    # 检查是否所有启用的平台都已完成
-                                    # 如果只运行了一个平台，只检查那个平台
-                                    # 如果运行了两个平台，需要两个都完成
+                                        logger.info(f"Reddit simulation completed: {state.simulation_id}, total_rounds={action_data.get('total_rounds')}, total_actions={action_data.get('total_actions')}")
+
+                                    # Check if all enabled platforms have completed.
+                                    # If only one platform is running, check only that one.
+                                    # If two platforms are running, both must complete.
                                     all_completed = cls._check_all_platforms_completed(state)
                                     if all_completed:
                                         state.runner_status = RunnerStatus.COMPLETED
                                         state.completed_at = datetime.now().isoformat()
-                                        logger.info(f"所有平台模拟已完成: {state.simulation_id}")
-                                
-                                # 更新轮次信息（从 round_end 事件）
+                                        logger.info(f"All platform simulations completed: {state.simulation_id}")
+
+                                # Update round info from round_end event
                                 elif event_type == "round_end":
                                     round_num = action_data.get("round", 0)
                                     simulated_hours = action_data.get("simulated_hours", 0)
-                                    
-                                    # 更新各平台独立的轮次和时间
+
+                                    # Update per-platform independent round counts and simulated time
                                     if platform == "twitter":
                                         if round_num > state.twitter_current_round:
                                             state.twitter_current_round = round_num
@@ -649,11 +649,11 @@ class SimulationRunner:
                                         if round_num > state.reddit_current_round:
                                             state.reddit_current_round = round_num
                                         state.reddit_simulated_hours = simulated_hours
-                                    
-                                    # 总体轮次取两个平台的最大值
+
+                                    # Overall round count is the maximum across platforms
                                     if round_num > state.current_round:
                                         state.current_round = round_num
-                                    # 总体时间取两个平台的最大值
+                                    # Overall simulated time is the maximum across platforms
                                     state.simulated_hours = max(state.twitter_simulated_hours, state.reddit_simulated_hours)
                                 
                                 continue
@@ -671,11 +671,11 @@ class SimulationRunner:
                             )
                             state.add_action(action)
                             
-                            # 更新轮次
+                            # Update round count
                             if action.round_num and action.round_num > state.current_round:
                                 state.current_round = action.round_num
-                            
-                            # 如果启用了图谱记忆更新，将活动发送到Zep
+
+                            # If graph memory update is enabled, send activity to Zep
                             if graph_updater:
                                 graph_updater.add_activity_from_dict(action_data, platform)
                             
@@ -683,52 +683,52 @@ class SimulationRunner:
                             pass
                 return f.tell()
         except Exception as e:
-            logger.warning(f"读取动作日志失败: {log_path}, error={e}")
+            logger.warning(f"Failed to read action log: {log_path}, error={e}")
             return position
     
     @classmethod
     def _check_all_platforms_completed(cls, state: SimulationRunState) -> bool:
         """
-        检查所有启用的平台是否都已完成模拟
-        
-        通过检查对应的 actions.jsonl 文件是否存在来判断平台是否被启用
-        
+        Check whether all enabled platforms have completed their simulation.
+
+        Platform enablement is determined by whether the corresponding actions.jsonl file exists.
+
         Returns:
-            True 如果所有启用的平台都已完成
+            True if all enabled platforms have completed
         """
         sim_dir = os.path.join(cls.RUN_STATE_DIR, state.simulation_id)
         twitter_log = os.path.join(sim_dir, "twitter", "actions.jsonl")
         reddit_log = os.path.join(sim_dir, "reddit", "actions.jsonl")
-        
-        # 检查哪些平台被启用（通过文件是否存在判断）
+
+        # Determine which platforms are enabled (based on file existence)
         twitter_enabled = os.path.exists(twitter_log)
         reddit_enabled = os.path.exists(reddit_log)
-        
-        # 如果平台被启用但未完成，则返回 False
+
+        # If a platform is enabled but not completed, return False
         if twitter_enabled and not state.twitter_completed:
             return False
         if reddit_enabled and not state.reddit_completed:
             return False
-        
-        # 至少有一个平台被启用且已完成
+
+        # At least one platform must be enabled and completed
         return twitter_enabled or reddit_enabled
     
     @classmethod
     def _terminate_process(cls, process: subprocess.Popen, simulation_id: str, timeout: int = 10):
         """
-        跨平台终止进程及其子进程
-        
+        Terminate a process and its child processes in a cross-platform manner.
+
         Args:
-            process: 要终止的进程
-            simulation_id: 模拟ID（用于日志）
-            timeout: 等待进程退出的超时时间（秒）
+            process: The process to terminate
+            simulation_id: Simulation ID (used for logging)
+            timeout: Timeout in seconds to wait for the process to exit
         """
         if IS_WINDOWS:
-            # Windows: 使用 taskkill 命令终止进程树
-            # /F = 强制终止, /T = 终止进程树（包括子进程）
-            logger.info(f"终止进程树 (Windows): simulation={simulation_id}, pid={process.pid}")
+            # Windows: use taskkill to terminate the process tree
+            # /F = force terminate, /T = terminate process tree (including children)
+            logger.info(f"Terminating process tree (Windows): simulation={simulation_id}, pid={process.pid}")
             try:
-                # 先尝试优雅终止
+                # Try graceful termination first
                 subprocess.run(
                     ['taskkill', '/PID', str(process.pid), '/T'],
                     capture_output=True,
@@ -737,8 +737,8 @@ class SimulationRunner:
                 try:
                     process.wait(timeout=timeout)
                 except subprocess.TimeoutExpired:
-                    # 强制终止
-                    logger.warning(f"进程未响应，强制终止: {simulation_id}")
+                    # Force terminate
+                    logger.warning(f"Process not responding, forcing termination: {simulation_id}")
                     subprocess.run(
                         ['taskkill', '/F', '/PID', str(process.pid), '/T'],
                         capture_output=True,
@@ -746,26 +746,26 @@ class SimulationRunner:
                     )
                     process.wait(timeout=5)
             except Exception as e:
-                logger.warning(f"taskkill 失败，尝试 terminate: {e}")
+                logger.warning(f"taskkill failed, falling back to terminate: {e}")
                 process.terminate()
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     process.kill()
         else:
-            # Unix: 使用进程组终止
-            # 由于使用了 start_new_session=True，进程组 ID 等于主进程 PID
+            # Unix: terminate using process group
+            # Since start_new_session=True was used, process group ID equals the main process PID
             pgid = os.getpgid(process.pid)
-            logger.info(f"终止进程组 (Unix): simulation={simulation_id}, pgid={pgid}")
-            
-            # 先发送 SIGTERM 给整个进程组
+            logger.info(f"Terminating process group (Unix): simulation={simulation_id}, pgid={pgid}")
+
+            # Send SIGTERM to the entire process group first
             os.killpg(pgid, signal.SIGTERM)
-            
+
             try:
                 process.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
-                # 如果超时后还没结束，强制发送 SIGKILL
-                logger.warning(f"进程组未响应 SIGTERM，强制终止: {simulation_id}")
+                # If it hasn't exited after timeout, force send SIGKILL
+                logger.warning(f"Process group not responding to SIGTERM, forcing termination: {simulation_id}")
                 os.killpg(pgid, signal.SIGKILL)
                 process.wait(timeout=5)
     
