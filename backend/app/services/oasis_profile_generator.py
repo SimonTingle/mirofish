@@ -1,11 +1,11 @@
 """
-OASIS Agent Profile生成器
-将Zep图谱中的实体转换为OASIS模拟平台所需的Agent Profile格式
+OASIS Agent Profile generator.
+Converts entities from the Zep knowledge graph into the Agent Profile format required by the OASIS simulation platform.
 
-优化改进：
-1. 调用Zep检索功能二次丰富节点信息
-2. 优化提示词生成非常详细的人设
-3. 区分个人实体和抽象群体实体
+Improvements:
+1. Calls Zep retrieval functionality to further enrich node information
+2. Optimized prompts to generate highly detailed personas
+3. Distinguishes between individual entities and abstract group entities
 """
 
 import json
@@ -27,31 +27,31 @@ logger = get_logger('mirofish.oasis_profile')
 
 @dataclass
 class OasisAgentProfile:
-    """OASIS Agent Profile数据结构"""
-    # 通用字段
+    """OASIS Agent Profile data structure"""
+    # Common fields
     user_id: int
     user_name: str
     name: str
     bio: str
     persona: str
-    
-    # 可选字段 - Reddit风格
+
+    # Optional fields - Reddit style
     karma: int = 1000
-    
-    # 可选字段 - Twitter风格
+
+    # Optional fields - Twitter style
     friend_count: int = 100
     follower_count: int = 150
     statuses_count: int = 500
-    
-    # 额外人设信息
+
+    # Additional persona information
     age: Optional[int] = None
     gender: Optional[str] = None
     mbti: Optional[str] = None
     country: Optional[str] = None
     profession: Optional[str] = None
     interested_topics: List[str] = field(default_factory=list)
-    
-    # 来源实体信息
+
+    # Source entity information
     source_entity_uuid: Optional[str] = None
     source_entity_type: Optional[str] = None
     

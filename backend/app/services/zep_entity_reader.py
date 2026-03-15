@@ -411,21 +411,21 @@ class ZepEntityReader:
             return None
     
     def get_entities_by_type(
-        self, 
-        graph_id: str, 
+        self,
+        graph_id: str,
         entity_type: str,
         enrich_with_edges: bool = True
     ) -> List[EntityNode]:
         """
-        获取指定类型的所有实体
-        
+        Retrieve all entities of a specific type.
+
         Args:
-            graph_id: 图谱ID
-            entity_type: 实体类型（如 "Student", "PublicFigure" 等）
-            enrich_with_edges: 是否获取相关边信息
-            
+            graph_id: Graph ID
+            entity_type: Entity type (e.g., "Student", "PublicFigure")
+            enrich_with_edges: Whether to retrieve related edge information
+
         Returns:
-            实体列表
+            List of entities
         """
         result = self.filter_defined_entities(
             graph_id=graph_id,
