@@ -771,28 +771,28 @@ class SimulationRunner:
     
     @classmethod
     def stop_simulation(cls, simulation_id: str) -> SimulationRunState:
-        """停止模拟"""
+        """Stop simulation"""
         state = cls.get_run_state(simulation_id)
         if not state:
-            raise ValueError(f"模拟不存在: {simulation_id}")
-        
+            raise ValueError(f"Simulation does not exist: {simulation_id}")
+
         if state.runner_status not in [RunnerStatus.RUNNING, RunnerStatus.PAUSED]:
-            raise ValueError(f"模拟未在运行: {simulation_id}, status={state.runner_status}")
-        
+            raise ValueError(f"Simulation is not running: {simulation_id}, status={state.runner_status}")
+
         state.runner_status = RunnerStatus.STOPPING
         cls._save_run_state(state)
-        
-        # 终止进程
+
+        # Terminate the process
         process = cls._processes.get(simulation_id)
         if process and process.poll() is None:
             try:
                 cls._terminate_process(process, simulation_id)
             except ProcessLookupError:
-                # 进程已经不存在
+                # Process no longer exists
                 pass
             except Exception as e:
-                logger.error(f"终止进程组失败: {simulation_id}, error={e}")
-                # 回退到直接终止进程
+                logger.error(f"Failed to terminate process group: {simulation_id}, error={e}")
+                # Fall back to direct process termination
                 try:
                     process.terminate()
                     process.wait(timeout=5)
@@ -805,16 +805,16 @@ class SimulationRunner:
         state.completed_at = datetime.now().isoformat()
         cls._save_run_state(state)
         
-        # 停止图谱记忆更新器
+        # Stop the graph memory updater
         if cls._graph_memory_enabled.get(simulation_id, False):
             try:
                 ZepGraphMemoryManager.stop_updater(simulation_id)
-                logger.info(f"已停止图谱记忆更新: simulation_id={simulation_id}")
+                logger.info(f"Graph memory update stopped: simulation_id={simulation_id}")
             except Exception as e:
-                logger.error(f"停止图谱记忆更新器失败: {e}")
+                logger.error(f"Failed to stop graph memory updater: {e}")
             cls._graph_memory_enabled.pop(simulation_id, None)
-        
-        logger.info(f"模拟已停止: {simulation_id}")
+
+        logger.info(f"Simulation stopped: {simulation_id}")
         return state
     
     @classmethod
@@ -827,41 +827,41 @@ class SimulationRunner:
         round_num: Optional[int] = None
     ) -> List[AgentAction]:
         """
-        从单个动作文件中读取动作
-        
+        Read actions from a single action file.
+
         Args:
-            file_path: 动作日志文件路径
-            default_platform: 默认平台（当动作记录中没有 platform 字段时使用）
-            platform_filter: 过滤平台
-            agent_id: 过滤 Agent ID
-            round_num: 过滤轮次
+            file_path: Path to the action log file
+            default_platform: Default platform (used when the action record has no platform field)
+            platform_filter: Filter by platform
+            agent_id: Filter by Agent ID
+            round_num: Filter by round number
         """
         if not os.path.exists(file_path):
             return []
-        
+
         actions = []
-        
+
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
-                
+
                 try:
                     data = json.loads(line)
-                    
-                    # 跳过非动作记录（如 simulation_start, round_start, round_end 等事件）
+
+                    # Skip non-action records (e.g., simulation_start, round_start, round_end events)
                     if "event_type" in data:
                         continue
-                    
-                    # 跳过没有 agent_id 的记录（非 Agent 动作）
+
+                    # Skip records without agent_id (non-Agent actions)
                     if "agent_id" not in data:
                         continue
-                    
-                    # 获取平台：优先使用记录中的 platform，否则使用默认平台
+
+                    # Get platform: prefer the platform field in the record, otherwise use the default
                     record_platform = data.get("platform") or default_platform or ""
-                    
-                    # 过滤
+
+                    # Apply filters
                     if platform_filter and record_platform != platform_filter:
                         continue
                     if agent_id is not None and data.get("agent_id") != agent_id:
@@ -895,54 +895,54 @@ class SimulationRunner:
         round_num: Optional[int] = None
     ) -> List[AgentAction]:
         """
-        获取所有平台的完整动作历史（无分页限制）
-        
+        Get the full action history across all platforms (no pagination limit).
+
         Args:
-            simulation_id: 模拟ID
-            platform: 过滤平台（twitter/reddit）
-            agent_id: 过滤Agent
-            round_num: 过滤轮次
-            
+            simulation_id: Simulation ID
+            platform: Filter by platform (twitter/reddit)
+            agent_id: Filter by Agent ID
+            round_num: Filter by round number
+
         Returns:
-            完整的动作列表（按时间戳排序，新的在前）
+            Full action list (sorted by timestamp, newest first)
         """
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         actions = []
-        
-        # 读取 Twitter 动作文件（根据文件路径自动设置 platform 为 twitter）
+
+        # Read Twitter action file (platform automatically set to 'twitter' based on file path)
         twitter_actions_log = os.path.join(sim_dir, "twitter", "actions.jsonl")
         if not platform or platform == "twitter":
             actions.extend(cls._read_actions_from_file(
                 twitter_actions_log,
-                default_platform="twitter",  # 自动填充 platform 字段
+                default_platform="twitter",  # Auto-fill platform field
                 platform_filter=platform,
-                agent_id=agent_id, 
+                agent_id=agent_id,
                 round_num=round_num
             ))
-        
-        # 读取 Reddit 动作文件（根据文件路径自动设置 platform 为 reddit）
+
+        # Read Reddit action file (platform automatically set to 'reddit' based on file path)
         reddit_actions_log = os.path.join(sim_dir, "reddit", "actions.jsonl")
         if not platform or platform == "reddit":
             actions.extend(cls._read_actions_from_file(
                 reddit_actions_log,
-                default_platform="reddit",  # 自动填充 platform 字段
+                default_platform="reddit",  # Auto-fill platform field
                 platform_filter=platform,
                 agent_id=agent_id,
                 round_num=round_num
             ))
-        
-        # 如果分平台文件不存在，尝试读取旧的单一文件格式
+
+        # If per-platform files do not exist, try reading the old single-file format
         if not actions:
             actions_log = os.path.join(sim_dir, "actions.jsonl")
             actions = cls._read_actions_from_file(
                 actions_log,
-                default_platform=None,  # 旧格式文件中应该有 platform 字段
+                default_platform=None,  # Old format files should have a platform field
                 platform_filter=platform,
                 agent_id=agent_id,
                 round_num=round_num
             )
-        
-        # 按时间戳排序（新的在前）
+
+        # Sort by timestamp (newest first)
         actions.sort(key=lambda x: x.timestamp, reverse=True)
         
         return actions
@@ -958,18 +958,18 @@ class SimulationRunner:
         round_num: Optional[int] = None
     ) -> List[AgentAction]:
         """
-        获取动作历史（带分页）
-        
+        Get action history with pagination.
+
         Args:
-            simulation_id: 模拟ID
-            limit: 返回数量限制
-            offset: 偏移量
-            platform: 过滤平台
-            agent_id: 过滤Agent
-            round_num: 过滤轮次
-            
+            simulation_id: Simulation ID
+            limit: Maximum number of results to return
+            offset: Pagination offset
+            platform: Filter by platform
+            agent_id: Filter by Agent ID
+            round_num: Filter by round number
+
         Returns:
-            动作列表
+            List of actions
         """
         actions = cls.get_all_actions(
             simulation_id=simulation_id,
@@ -977,8 +977,8 @@ class SimulationRunner:
             agent_id=agent_id,
             round_num=round_num
         )
-        
-        # 分页
+
+        # Apply pagination
         return actions[offset:offset + limit]
     
     @classmethod
@@ -989,19 +989,19 @@ class SimulationRunner:
         end_round: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        获取模拟时间线（按轮次汇总）
-        
+        Get simulation timeline summarized by round.
+
         Args:
-            simulation_id: 模拟ID
-            start_round: 起始轮次
-            end_round: 结束轮次
-            
+            simulation_id: Simulation ID
+            start_round: Starting round number
+            end_round: Ending round number
+
         Returns:
-            每轮的汇总信息
+            Summary information for each round
         """
         actions = cls.get_actions(simulation_id, limit=10000)
-        
-        # 按轮次分组
+
+        # Group by round
         rounds: Dict[int, Dict[str, Any]] = {}
         
         for action in actions:
@@ -1034,7 +1034,7 @@ class SimulationRunner:
             r["action_types"][action.action_type] = r["action_types"].get(action.action_type, 0) + 1
             r["last_action_time"] = action.timestamp
         
-        # 转换为列表
+        # Convert to list
         result = []
         for round_num in sorted(rounds.keys()):
             r = rounds[round_num]
@@ -1055,10 +1055,10 @@ class SimulationRunner:
     @classmethod
     def get_agent_stats(cls, simulation_id: str) -> List[Dict[str, Any]]:
         """
-        获取每个Agent的统计信息
-        
+        Get statistics for each Agent.
+
         Returns:
-            Agent统计列表
+            List of Agent statistics
         """
         actions = cls.get_actions(simulation_id, limit=10000)
         
@@ -1090,7 +1090,7 @@ class SimulationRunner:
             stats["action_types"][action.action_type] = stats["action_types"].get(action.action_type, 0) + 1
             stats["last_action_time"] = action.timestamp
         
-        # 按总动作数排序
+        # Sort by total action count
         result = sorted(agent_stats.values(), key=lambda x: x["total_actions"], reverse=True)
         
         return result
@@ -1098,51 +1098,51 @@ class SimulationRunner:
     @classmethod
     def cleanup_simulation_logs(cls, simulation_id: str) -> Dict[str, Any]:
         """
-        清理模拟的运行日志（用于强制重新开始模拟）
-        
-        会删除以下文件：
+        Clean up run logs for a simulation (used to force a fresh restart).
+
+        The following files will be deleted:
         - run_state.json
         - twitter/actions.jsonl
         - reddit/actions.jsonl
         - simulation.log
         - stdout.log / stderr.log
-        - twitter_simulation.db（模拟数据库）
-        - reddit_simulation.db（模拟数据库）
-        - env_status.json（环境状态）
-        
-        注意：不会删除配置文件（simulation_config.json）和 profile 文件
-        
+        - twitter_simulation.db (simulation database)
+        - reddit_simulation.db (simulation database)
+        - env_status.json (environment status)
+
+        Note: Config files (simulation_config.json) and profile files will NOT be deleted.
+
         Args:
-            simulation_id: 模拟ID
-            
+            simulation_id: Simulation ID
+
         Returns:
-            清理结果信息
+            Cleanup result information
         """
         import shutil
-        
+
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
-        
+
         if not os.path.exists(sim_dir):
-            return {"success": True, "message": "模拟目录不存在，无需清理"}
-        
+            return {"success": True, "message": "Simulation directory does not exist, nothing to clean"}
+
         cleaned_files = []
         errors = []
-        
-        # 要删除的文件列表（包括数据库文件）
+
+        # List of files to delete (including database files)
         files_to_delete = [
             "run_state.json",
             "simulation.log",
             "stdout.log",
             "stderr.log",
-            "twitter_simulation.db",  # Twitter 平台数据库
-            "reddit_simulation.db",   # Reddit 平台数据库
-            "env_status.json",        # 环境状态文件
+            "twitter_simulation.db",  # Twitter platform database
+            "reddit_simulation.db",   # Reddit platform database
+            "env_status.json",        # Environment status file
         ]
-        
-        # 要删除的目录列表（包含动作日志）
+
+        # List of directories to clean (containing action logs)
         dirs_to_clean = ["twitter", "reddit"]
-        
-        # 删除文件
+
+        # Delete files
         for filename in files_to_delete:
             file_path = os.path.join(sim_dir, filename)
             if os.path.exists(file_path):
@@ -1150,9 +1150,9 @@ class SimulationRunner:
                     os.remove(file_path)
                     cleaned_files.append(filename)
                 except Exception as e:
-                    errors.append(f"删除 {filename} 失败: {str(e)}")
-        
-        # 清理平台目录中的动作日志
+                    errors.append(f"Failed to delete {filename}: {str(e)}")
+
+        # Clean up action logs in platform directories
         for dir_name in dirs_to_clean:
             dir_path = os.path.join(sim_dir, dir_name)
             if os.path.exists(dir_path):
@@ -1162,13 +1162,13 @@ class SimulationRunner:
                         os.remove(actions_file)
                         cleaned_files.append(f"{dir_name}/actions.jsonl")
                     except Exception as e:
-                        errors.append(f"删除 {dir_name}/actions.jsonl 失败: {str(e)}")
-        
-        # 清理内存中的运行状态
+                        errors.append(f"Failed to delete {dir_name}/actions.jsonl: {str(e)}")
+
+        # Clean up in-memory run state
         if simulation_id in cls._run_states:
             del cls._run_states[simulation_id]
-        
-        logger.info(f"清理模拟日志完成: {simulation_id}, 删除文件: {cleaned_files}")
+
+        logger.info(f"Simulation log cleanup complete: {simulation_id}, deleted files: {cleaned_files}")
         
         return {
             "success": len(errors) == 0,
@@ -1176,71 +1176,71 @@ class SimulationRunner:
             "errors": errors if errors else None
         }
     
-    # 防止重复清理的标志
+    # Flag to prevent duplicate cleanup
     _cleanup_done = False
-    
+
     @classmethod
     def cleanup_all_simulations(cls):
         """
-        清理所有运行中的模拟进程
-        
-        在服务器关闭时调用，确保所有子进程被终止
+        Clean up all running simulation processes.
+
+        Called when the server is shutting down to ensure all child processes are terminated.
         """
-        # 防止重复清理
+        # Prevent duplicate cleanup
         if cls._cleanup_done:
             return
         cls._cleanup_done = True
-        
-        # 检查是否有内容需要清理（避免空进程的进程打印无用日志）
+
+        # Check if there is anything to clean (avoid printing useless logs when no processes exist)
         has_processes = bool(cls._processes)
         has_updaters = bool(cls._graph_memory_enabled)
-        
+
         if not has_processes and not has_updaters:
-            return  # 没有需要清理的内容，静默返回
-        
-        logger.info("正在清理所有模拟进程...")
-        
-        # 首先停止所有图谱记忆更新器（stop_all 内部会打印日志）
+            return  # Nothing to clean, return silently
+
+        logger.info("Cleaning up all simulation processes...")
+
+        # Stop all graph memory updaters first (stop_all prints its own logs internally)
         try:
             ZepGraphMemoryManager.stop_all()
         except Exception as e:
-            logger.error(f"停止图谱记忆更新器失败: {e}")
+            logger.error(f"Failed to stop graph memory updaters: {e}")
         cls._graph_memory_enabled.clear()
-        
-        # 复制字典以避免在迭代时修改
+
+        # Copy the dictionary to avoid modifying it while iterating
         processes = list(cls._processes.items())
-        
+
         for simulation_id, process in processes:
             try:
-                if process.poll() is None:  # 进程仍在运行
-                    logger.info(f"终止模拟进程: {simulation_id}, pid={process.pid}")
-                    
+                if process.poll() is None:  # Process is still running
+                    logger.info(f"Terminating simulation process: {simulation_id}, pid={process.pid}")
+
                     try:
-                        # 使用跨平台的进程终止方法
+                        # Use cross-platform process termination method
                         cls._terminate_process(process, simulation_id, timeout=5)
                     except (ProcessLookupError, OSError):
-                        # 进程可能已经不存在，尝试直接终止
+                        # Process may no longer exist, try direct termination
                         try:
                             process.terminate()
                             process.wait(timeout=3)
                         except Exception:
                             process.kill()
-                    
-                    # 更新 run_state.json
+
+                    # Update run_state.json
                     state = cls.get_run_state(simulation_id)
                     if state:
                         state.runner_status = RunnerStatus.STOPPED
                         state.twitter_running = False
                         state.reddit_running = False
                         state.completed_at = datetime.now().isoformat()
-                        state.error = "服务器关闭，模拟被终止"
+                        state.error = "Server shutdown, simulation terminated"
                         cls._save_run_state(state)
-                    
-                    # 同时更新 state.json，将状态设为 stopped
+
+                    # Also update state.json to set status to stopped
                     try:
                         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
                         state_file = os.path.join(sim_dir, "state.json")
-                        logger.info(f"尝试更新 state.json: {state_file}")
+                        logger.info(f"Attempting to update state.json: {state_file}")
                         if os.path.exists(state_file):
                             with open(state_file, 'r', encoding='utf-8') as f:
                                 state_data = json.load(f)
@@ -1248,16 +1248,16 @@ class SimulationRunner:
                             state_data['updated_at'] = datetime.now().isoformat()
                             with open(state_file, 'w', encoding='utf-8') as f:
                                 json.dump(state_data, f, indent=2, ensure_ascii=False)
-                            logger.info(f"已更新 state.json 状态为 stopped: {simulation_id}")
+                            logger.info(f"Updated state.json status to stopped: {simulation_id}")
                         else:
-                            logger.warning(f"state.json 不存在: {state_file}")
+                            logger.warning(f"state.json does not exist: {state_file}")
                     except Exception as state_err:
-                        logger.warning(f"更新 state.json 失败: {simulation_id}, error={state_err}")
-                        
+                        logger.warning(f"Failed to update state.json: {simulation_id}, error={state_err}")
+
             except Exception as e:
-                logger.error(f"清理进程失败: {simulation_id}, error={e}")
-        
-        # 清理文件句柄
+                logger.error(f"Failed to clean up process: {simulation_id}, error={e}")
+
+        # Close file handles
         for simulation_id, file_handle in list(cls._stdout_files.items()):
             try:
                 if file_handle:
@@ -1265,7 +1265,7 @@ class SimulationRunner:
             except Exception:
                 pass
         cls._stdout_files.clear()
-        
+
         for simulation_id, file_handle in list(cls._stderr_files.items()):
             try:
                 if file_handle:
@@ -1273,83 +1273,85 @@ class SimulationRunner:
             except Exception:
                 pass
         cls._stderr_files.clear()
-        
-        # 清理内存中的状态
+
+        # Clean up in-memory state
         cls._processes.clear()
         cls._action_queues.clear()
-        
-        logger.info("模拟进程清理完成")
+
+        logger.info("Simulation process cleanup complete")
     
     @classmethod
     def register_cleanup(cls):
         """
-        注册清理函数
-        
-        在 Flask 应用启动时调用，确保服务器关闭时清理所有模拟进程
+        Register the cleanup function.
+
+        Called when the Flask application starts to ensure all simulation processes are
+        terminated when the server shuts down.
         """
         global _cleanup_registered
-        
+
         if _cleanup_registered:
             return
-        
-        # Flask debug 模式下，只在 reloader 子进程中注册清理（实际运行应用的进程）
-        # WERKZEUG_RUN_MAIN=true 表示是 reloader 子进程
-        # 如果不是 debug 模式，则没有这个环境变量，也需要注册
+
+        # In Flask debug mode, only register cleanup in the reloader child process
+        # (the process that actually runs the app).
+        # WERKZEUG_RUN_MAIN=true indicates the reloader child process.
+        # If not in debug mode, this env var won't be set, but cleanup still needs to be registered.
         is_reloader_process = os.environ.get('WERKZEUG_RUN_MAIN') == 'true'
         is_debug_mode = os.environ.get('FLASK_DEBUG') == '1' or os.environ.get('WERKZEUG_RUN_MAIN') is not None
-        
-        # 在 debug 模式下，只在 reloader 子进程中注册；非 debug 模式下始终注册
+
+        # In debug mode, only register in the reloader child process; always register in non-debug mode
         if is_debug_mode and not is_reloader_process:
-            _cleanup_registered = True  # 标记已注册，防止子进程再次尝试
+            _cleanup_registered = True  # Mark as registered to prevent child processes from retrying
             return
-        
-        # 保存原有的信号处理器
+
+        # Save original signal handlers
         original_sigint = signal.getsignal(signal.SIGINT)
         original_sigterm = signal.getsignal(signal.SIGTERM)
-        # SIGHUP 只在 Unix 系统存在（macOS/Linux），Windows 没有
+        # SIGHUP only exists on Unix systems (macOS/Linux), not on Windows
         original_sighup = None
         has_sighup = hasattr(signal, 'SIGHUP')
         if has_sighup:
             original_sighup = signal.getsignal(signal.SIGHUP)
-        
+
         def cleanup_handler(signum=None, frame=None):
-            """信号处理器：先清理模拟进程，再调用原处理器"""
-            # 只有在有进程需要清理时才打印日志
+            """Signal handler: clean up simulation processes first, then call original handler"""
+            # Only log if there are processes that need cleaning
             if cls._processes or cls._graph_memory_enabled:
-                logger.info(f"收到信号 {signum}，开始清理...")
+                logger.info(f"Received signal {signum}, starting cleanup...")
             cls.cleanup_all_simulations()
-            
-            # 调用原有的信号处理器，让 Flask 正常退出
+
+            # Call the original signal handler to let Flask exit normally
             if signum == signal.SIGINT and callable(original_sigint):
                 original_sigint(signum, frame)
             elif signum == signal.SIGTERM and callable(original_sigterm):
                 original_sigterm(signum, frame)
             elif has_sighup and signum == signal.SIGHUP:
-                # SIGHUP: 终端关闭时发送
+                # SIGHUP: sent when the terminal is closed
                 if callable(original_sighup):
                     original_sighup(signum, frame)
                 else:
-                    # 默认行为：正常退出
+                    # Default behavior: exit normally
                     sys.exit(0)
             else:
-                # 如果原处理器不可调用（如 SIG_DFL），则使用默认行为
+                # If the original handler is not callable (e.g., SIG_DFL), use default behavior
                 raise KeyboardInterrupt
-        
-        # 注册 atexit 处理器（作为备用）
+
+        # Register atexit handler as a fallback
         atexit.register(cls.cleanup_all_simulations)
-        
-        # 注册信号处理器（仅在主线程中）
+
+        # Register signal handlers (only in the main thread)
         try:
-            # SIGTERM: kill 命令默认信号
+            # SIGTERM: default signal sent by the kill command
             signal.signal(signal.SIGTERM, cleanup_handler)
             # SIGINT: Ctrl+C
             signal.signal(signal.SIGINT, cleanup_handler)
-            # SIGHUP: 终端关闭（仅 Unix 系统）
+            # SIGHUP: terminal closed (Unix systems only)
             if has_sighup:
                 signal.signal(signal.SIGHUP, cleanup_handler)
         except ValueError:
-            # 不在主线程中，只能使用 atexit
-            logger.warning("无法注册信号处理器（不在主线程），仅使用 atexit")
+            # Not in the main thread, can only use atexit
+            logger.warning("Cannot register signal handlers (not in main thread), using atexit only")
         
         _cleanup_registered = True
     
