@@ -58,18 +58,18 @@ class OasisAgentProfile:
     created_at: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
     
     def to_reddit_format(self) -> Dict[str, Any]:
-        """转换为Reddit平台格式"""
+        """Convert to Reddit platform format."""
         profile = {
             "user_id": self.user_id,
-            "username": self.user_name,  # OASIS 库要求字段名为 username（无下划线）
+            "username": self.user_name,  # OASIS library requires the field name 'username' (no underscore)
             "name": self.name,
             "bio": self.bio,
             "persona": self.persona,
             "karma": self.karma,
             "created_at": self.created_at,
         }
-        
-        # 添加额外人设信息（如果有）
+
+        # Add additional persona information (if available)
         if self.age:
             profile["age"] = self.age
         if self.gender:
@@ -86,10 +86,10 @@ class OasisAgentProfile:
         return profile
     
     def to_twitter_format(self) -> Dict[str, Any]:
-        """转换为Twitter平台格式"""
+        """Convert to Twitter platform format."""
         profile = {
             "user_id": self.user_id,
-            "username": self.user_name,  # OASIS 库要求字段名为 username（无下划线）
+            "username": self.user_name,  # OASIS library requires the field name 'username' (no underscore)
             "name": self.name,
             "bio": self.bio,
             "persona": self.persona,
@@ -98,8 +98,8 @@ class OasisAgentProfile:
             "statuses_count": self.statuses_count,
             "created_at": self.created_at,
         }
-        
-        # 添加额外人设信息
+
+        # Add additional persona information
         if self.age:
             profile["age"] = self.age
         if self.gender:
@@ -116,7 +116,7 @@ class OasisAgentProfile:
         return profile
     
     def to_dict(self) -> Dict[str, Any]:
-        """转换为完整字典格式"""
+        """Convert to full dictionary format."""
         return {
             "user_id": self.user_id,
             "user_name": self.user_name,
