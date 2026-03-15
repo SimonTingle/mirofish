@@ -1,12 +1,12 @@
 """
-Report Agent服务
-使用LangChain + Zep实现ReACT模式的模拟报告生成
+Report Agent Service
+Implements ReACT-based simulation report generation using LangChain + Zep
 
-功能：
-1. 根据模拟需求和Zep图谱信息生成报告
-2. 先规划目录结构，然后分段生成
-3. 每段采用ReACT多轮思考与反思模式
-4. 支持与用户对话，在对话中自主调用检索工具
+Features:
+1. Generates reports based on simulation requirements and Zep graph data
+2. Plans the outline structure first, then generates content section by section
+3. Each section uses multi-round ReACT reasoning and reflection
+4. Supports user conversation, autonomously calling retrieval tools during dialogue
 """
 
 import os
@@ -34,18 +34,18 @@ logger = get_logger('mirofish.report_agent')
 
 class ReportLogger:
     """
-    Report Agent 详细日志记录器
-    
-    在报告文件夹中生成 agent_log.jsonl 文件，记录每一步详细动作。
-    每行是一个完整的 JSON 对象，包含时间戳、动作类型、详细内容等。
+    Report Agent detailed logger
+
+    Generates an agent_log.jsonl file in the report folder, recording each step in detail.
+    Each line is a complete JSON object containing timestamp, action type, detailed content, etc.
     """
-    
+
     def __init__(self, report_id: str):
         """
-        初始化日志记录器
-        
+        Initialize the logger
+
         Args:
-            report_id: 报告ID，用于确定日志文件路径
+            report_id: Report ID used to determine the log file path
         """
         self.report_id = report_id
         self.log_file_path = os.path.join(
@@ -55,31 +55,31 @@ class ReportLogger:
         self._ensure_log_file()
     
     def _ensure_log_file(self):
-        """确保日志文件所在目录存在"""
+        """Ensure the directory for the log file exists"""
         log_dir = os.path.dirname(self.log_file_path)
         os.makedirs(log_dir, exist_ok=True)
-    
+
     def _get_elapsed_time(self) -> float:
-        """获取从开始到现在的耗时（秒）"""
+        """Get elapsed time in seconds since start"""
         return (datetime.now() - self.start_time).total_seconds()
-    
+
     def log(
-        self, 
-        action: str, 
+        self,
+        action: str,
         stage: str,
         details: Dict[str, Any],
         section_title: str = None,
         section_index: int = None
     ):
         """
-        记录一条日志
-        
+        Record a log entry
+
         Args:
-            action: 动作类型，如 'start', 'tool_call', 'llm_response', 'section_complete' 等
-            stage: 当前阶段，如 'planning', 'generating', 'completed'
-            details: 详细内容字典，不截断
-            section_title: 当前章节标题（可选）
-            section_index: 当前章节索引（可选）
+            action: Action type, e.g. 'start', 'tool_call', 'llm_response', 'section_complete'
+            stage: Current stage, e.g. 'planning', 'generating', 'completed'
+            details: Detailed content dictionary, not truncated
+            section_title: Current section title (optional)
+            section_index: Current section index (optional)
         """
         log_entry = {
             "timestamp": datetime.now().isoformat(),
@@ -92,12 +92,12 @@ class ReportLogger:
             "details": details
         }
         
-        # 追加写入 JSONL 文件
+        # Append to JSONL file
         with open(self.log_file_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
     
     def log_start(self, simulation_id: str, graph_id: str, simulation_requirement: str):
-        """记录报告生成开始"""
+        """Log report generation start"""
         self.log(
             action="report_start",
             stage="pending",
@@ -105,52 +105,52 @@ class ReportLogger:
                 "simulation_id": simulation_id,
                 "graph_id": graph_id,
                 "simulation_requirement": simulation_requirement,
-                "message": "报告生成任务开始"
+                "message": "Report generation task started"
             }
         )
-    
+
     def log_planning_start(self):
-        """记录大纲规划开始"""
+        """Log outline planning start"""
         self.log(
             action="planning_start",
             stage="planning",
-            details={"message": "开始规划报告大纲"}
+            details={"message": "Starting report outline planning"}
         )
-    
+
     def log_planning_context(self, context: Dict[str, Any]):
-        """记录规划时获取的上下文信息"""
+        """Log context information retrieved during planning"""
         self.log(
             action="planning_context",
             stage="planning",
             details={
-                "message": "获取模拟上下文信息",
+                "message": "Retrieved simulation context information",
                 "context": context
             }
         )
-    
+
     def log_planning_complete(self, outline_dict: Dict[str, Any]):
-        """记录大纲规划完成"""
+        """Log outline planning completion"""
         self.log(
             action="planning_complete",
             stage="planning",
             details={
-                "message": "大纲规划完成",
+                "message": "Outline planning complete",
                 "outline": outline_dict
             }
         )
-    
+
     def log_section_start(self, section_title: str, section_index: int):
-        """记录章节生成开始"""
+        """Log section generation start"""
         self.log(
             action="section_start",
             stage="generating",
             section_title=section_title,
             section_index=section_index,
-            details={"message": f"开始生成章节: {section_title}"}
+            details={"message": f"Starting section generation: {section_title}"}
         )
-    
+
     def log_react_thought(self, section_title: str, section_index: int, iteration: int, thought: str):
-        """记录 ReACT 思考过程"""
+        """Log ReACT reasoning step"""
         self.log(
             action="react_thought",
             stage="generating",
@@ -159,19 +159,19 @@ class ReportLogger:
             details={
                 "iteration": iteration,
                 "thought": thought,
-                "message": f"ReACT 第{iteration}轮思考"
+                "message": f"ReACT iteration {iteration} reasoning"
             }
         )
-    
+
     def log_tool_call(
-        self, 
-        section_title: str, 
+        self,
+        section_title: str,
         section_index: int,
-        tool_name: str, 
+        tool_name: str,
         parameters: Dict[str, Any],
         iteration: int
     ):
-        """记录工具调用"""
+        """Log tool call"""
         self.log(
             action="tool_call",
             stage="generating",
@@ -181,10 +181,10 @@ class ReportLogger:
                 "iteration": iteration,
                 "tool_name": tool_name,
                 "parameters": parameters,
-                "message": f"调用工具: {tool_name}"
+                "message": f"Calling tool: {tool_name}"
             }
         )
-    
+
     def log_tool_result(
         self,
         section_title: str,
@@ -193,7 +193,7 @@ class ReportLogger:
         result: str,
         iteration: int
     ):
-        """记录工具调用结果（完整内容，不截断）"""
+        """Log tool call result (full content, not truncated)"""
         self.log(
             action="tool_result",
             stage="generating",
@@ -202,12 +202,12 @@ class ReportLogger:
             details={
                 "iteration": iteration,
                 "tool_name": tool_name,
-                "result": result,  # 完整结果，不截断
+                "result": result,  # Full result, not truncated
                 "result_length": len(result),
-                "message": f"工具 {tool_name} 返回结果"
+                "message": f"Tool {tool_name} returned result"
             }
         )
-    
+
     def log_llm_response(
         self,
         section_title: str,
@@ -217,7 +217,7 @@ class ReportLogger:
         has_tool_calls: bool,
         has_final_answer: bool
     ):
-        """记录 LLM 响应（完整内容，不截断）"""
+        """Log LLM response (full content, not truncated)"""
         self.log(
             action="llm_response",
             stage="generating",
@@ -225,14 +225,14 @@ class ReportLogger:
             section_index=section_index,
             details={
                 "iteration": iteration,
-                "response": response,  # 完整响应，不截断
+                "response": response,  # Full response, not truncated
                 "response_length": len(response),
                 "has_tool_calls": has_tool_calls,
                 "has_final_answer": has_final_answer,
-                "message": f"LLM 响应 (工具调用: {has_tool_calls}, 最终答案: {has_final_answer})"
+                "message": f"LLM response (tool_calls: {has_tool_calls}, final_answer: {has_final_answer})"
             }
         )
-    
+
     def log_section_content(
         self,
         section_title: str,
@@ -240,20 +240,20 @@ class ReportLogger:
         content: str,
         tool_calls_count: int
     ):
-        """记录章节内容生成完成（仅记录内容，不代表整个章节完成）"""
+        """Log section content generation complete (content only, does not indicate full section completion)"""
         self.log(
             action="section_content",
             stage="generating",
             section_title=section_title,
             section_index=section_index,
             details={
-                "content": content,  # 完整内容，不截断
+                "content": content,  # Full content, not truncated
                 "content_length": len(content),
                 "tool_calls_count": tool_calls_count,
-                "message": f"章节 {section_title} 内容生成完成"
+                "message": f"Section {section_title} content generation complete"
             }
         )
-    
+
     def log_section_full_complete(
         self,
         section_title: str,
@@ -261,9 +261,9 @@ class ReportLogger:
         full_content: str
     ):
         """
-        记录章节生成完成
+        Log section generation completion
 
-        前端应监听此日志来判断一个章节是否真正完成，并获取完整内容
+        The frontend should listen to this log entry to determine when a section is truly complete and retrieve its full content
         """
         self.log(
             action="section_complete",
@@ -273,24 +273,24 @@ class ReportLogger:
             details={
                 "content": full_content,
                 "content_length": len(full_content),
-                "message": f"章节 {section_title} 生成完成"
+                "message": f"Section {section_title} generation complete"
             }
         )
-    
+
     def log_report_complete(self, total_sections: int, total_time_seconds: float):
-        """记录报告生成完成"""
+        """Log report generation completion"""
         self.log(
             action="report_complete",
             stage="completed",
             details={
                 "total_sections": total_sections,
                 "total_time_seconds": round(total_time_seconds, 2),
-                "message": "报告生成完成"
+                "message": "Report generation complete"
             }
         )
-    
+
     def log_error(self, error_message: str, stage: str, section_title: str = None):
-        """记录错误"""
+        """Log an error"""
         self.log(
             action="error",
             stage=stage,
@@ -298,25 +298,25 @@ class ReportLogger:
             section_index=None,
             details={
                 "error": error_message,
-                "message": f"发生错误: {error_message}"
+                "message": f"Error occurred: {error_message}"
             }
         )
 
 
 class ReportConsoleLogger:
     """
-    Report Agent 控制台日志记录器
-    
-    将控制台风格的日志（INFO、WARNING等）写入报告文件夹中的 console_log.txt 文件。
-    这些日志与 agent_log.jsonl 不同，是纯文本格式的控制台输出。
+    Report Agent console logger
+
+    Writes console-style logs (INFO, WARNING, etc.) to a console_log.txt file in the report folder.
+    These logs are in plain text format, distinct from the structured agent_log.jsonl logs.
     """
-    
+
     def __init__(self, report_id: str):
         """
-        初始化控制台日志记录器
-        
+        Initialize the console logger
+
         Args:
-            report_id: 报告ID，用于确定日志文件路径
+            report_id: Report ID used to determine the log file path
         """
         self.report_id = report_id
         self.log_file_path = os.path.join(
@@ -327,66 +327,66 @@ class ReportConsoleLogger:
         self._setup_file_handler()
     
     def _ensure_log_file(self):
-        """确保日志文件所在目录存在"""
+        """Ensure the directory for the log file exists"""
         log_dir = os.path.dirname(self.log_file_path)
         os.makedirs(log_dir, exist_ok=True)
-    
+
     def _setup_file_handler(self):
-        """设置文件处理器，将日志同时写入文件"""
+        """Set up the file handler to write logs to a file"""
         import logging
-        
-        # 创建文件处理器
+
+        # Create file handler
         self._file_handler = logging.FileHandler(
             self.log_file_path,
             mode='a',
             encoding='utf-8'
         )
         self._file_handler.setLevel(logging.INFO)
-        
-        # 使用与控制台相同的简洁格式
+
+        # Use the same concise format as the console
         formatter = logging.Formatter(
             '[%(asctime)s] %(levelname)s: %(message)s',
             datefmt='%H:%M:%S'
         )
         self._file_handler.setFormatter(formatter)
-        
-        # 添加到 report_agent 相关的 logger
+
+        # Attach to report_agent-related loggers
         loggers_to_attach = [
             'mirofish.report_agent',
             'mirofish.zep_tools',
         ]
-        
+
         for logger_name in loggers_to_attach:
             target_logger = logging.getLogger(logger_name)
-            # 避免重复添加
+            # Avoid duplicate handlers
             if self._file_handler not in target_logger.handlers:
                 target_logger.addHandler(self._file_handler)
-    
+
     def close(self):
-        """关闭文件处理器并从 logger 中移除"""
+        """Close the file handler and remove it from loggers"""
         import logging
-        
+
         if self._file_handler:
             loggers_to_detach = [
                 'mirofish.report_agent',
                 'mirofish.zep_tools',
             ]
-            
+
             for logger_name in loggers_to_detach:
                 target_logger = logging.getLogger(logger_name)
                 if self._file_handler in target_logger.handlers:
                     target_logger.removeHandler(self._file_handler)
-            
+
             self._file_handler.close()
             self._file_handler = None
-    
+
     def __del__(self):
-        """析构时确保关闭文件处理器"""
+        """Ensure file handler is closed on destruction"""
         self.close()
 
 
 class ReportStatus(str, Enum):
-    """报告状态"""
+    """Report status"""
     PENDING = "pending"
     PLANNING = "planning"
     GENERATING = "generating"
@@ -396,7 +396,7 @@ class ReportStatus(str, Enum):
 
 @dataclass
 class ReportSection:
-    """报告章节"""
+    """Report section"""
     title: str
     content: str = ""
 
@@ -407,7 +407,7 @@ class ReportSection:
         }
 
     def to_markdown(self, level: int = 2) -> str:
-        """转换为Markdown格式"""
+        """Convert to Markdown format"""
         md = f"{'#' * level} {self.title}\n\n"
         if self.content:
             md += f"{self.content}\n\n"
@@ -416,7 +416,7 @@ class ReportSection:
 
 @dataclass
 class ReportOutline:
-    """报告大纲"""
+    """Report outline"""
     title: str
     summary: str
     sections: List[ReportSection]
@@ -429,7 +429,7 @@ class ReportOutline:
         }
     
     def to_markdown(self) -> str:
-        """转换为Markdown格式"""
+        """Convert to Markdown format"""
         md = f"# {self.title}\n\n"
         md += f"> {self.summary}\n\n"
         for section in self.sections:
@@ -439,7 +439,7 @@ class ReportOutline:
 
 @dataclass
 class Report:
-    """完整报告"""
+    """Complete report"""
     report_id: str
     simulation_id: str
     graph_id: str
@@ -467,84 +467,84 @@ class Report:
 
 
 # ═══════════════════════════════════════════════════════════════
-# Prompt 模板常量
+# Prompt Template Constants
 # ═══════════════════════════════════════════════════════════════
 
-# ── 工具描述 ──
+# ── Tool descriptions ──
 
 TOOL_DESC_INSIGHT_FORGE = """\
-【深度洞察检索 - 强大的检索工具】
-这是我们强大的检索函数，专为深度分析设计。它会：
-1. 自动将你的问题分解为多个子问题
-2. 从多个维度检索模拟图谱中的信息
-3. 整合语义搜索、实体分析、关系链追踪的结果
-4. 返回最全面、最深度的检索内容
+[Deep Insight Retrieval - Powerful Retrieval Tool]
+This is our most powerful retrieval function, designed for in-depth analysis. It will:
+1. Automatically decompose your question into multiple sub-questions
+2. Retrieve information from the simulation graph across multiple dimensions
+3. Integrate results from semantic search, entity analysis, and relationship chain tracing
+4. Return the most comprehensive and in-depth retrieval content
 
-【使用场景】
-- 需要深入分析某个话题
-- 需要了解事件的多个方面
-- 需要获取支撑报告章节的丰富素材
+[Use Cases]
+- Deep analysis of a specific topic
+- Understanding multiple aspects of an event
+- Gathering rich material to support a report section
 
-【返回内容】
-- 相关事实原文（可直接引用）
-- 核心实体洞察
-- 关系链分析"""
+[Returns]
+- Relevant raw facts (directly quotable)
+- Core entity insights
+- Relationship chain analysis"""
 
 TOOL_DESC_PANORAMA_SEARCH = """\
-【广度搜索 - 获取全貌视图】
-这个工具用于获取模拟结果的完整全貌，特别适合了解事件演变过程。它会：
-1. 获取所有相关节点和关系
-2. 区分当前有效的事实和历史/过期的事实
-3. 帮助你了解舆情是如何演变的
+[Breadth Search - Full Overview]
+This tool provides a complete overview of simulation results, especially suited for understanding event evolution. It will:
+1. Retrieve all relevant nodes and relationships
+2. Distinguish between currently active facts and historical/expired facts
+3. Help you understand how public opinion evolved
 
-【使用场景】
-- 需要了解事件的完整发展脉络
-- 需要对比不同阶段的舆情变化
-- 需要获取全面的实体和关系信息
+[Use Cases]
+- Understanding the complete development arc of an event
+- Comparing public opinion changes across different stages
+- Obtaining comprehensive entity and relationship information
 
-【返回内容】
-- 当前有效事实（模拟最新结果）
-- 历史/过期事实（演变记录）
-- 所有涉及的实体"""
+[Returns]
+- Currently active facts (latest simulation results)
+- Historical/expired facts (evolution records)
+- All involved entities"""
 
 TOOL_DESC_QUICK_SEARCH = """\
-【简单搜索 - 快速检索】
-轻量级的快速检索工具，适合简单、直接的信息查询。
+[Simple Search - Quick Retrieval]
+A lightweight, fast retrieval tool suited for simple, direct information queries.
 
-【使用场景】
-- 需要快速查找某个具体信息
-- 需要验证某个事实
-- 简单的信息检索
+[Use Cases]
+- Quickly looking up specific information
+- Verifying a fact
+- Simple information retrieval
 
-【返回内容】
-- 与查询最相关的事实列表"""
+[Returns]
+- List of facts most relevant to the query"""
 
 TOOL_DESC_INTERVIEW_AGENTS = """\
-【深度采访 - 真实Agent采访（双平台）】
-调用OASIS模拟环境的采访API，对正在运行的模拟Agent进行真实采访！
-这不是LLM模拟，而是调用真实的采访接口获取模拟Agent的原始回答。
-默认在Twitter和Reddit两个平台同时采访，获取更全面的观点。
+[Deep Interview - Real Agent Interviews (Dual Platform)]
+Calls the OASIS simulation environment's interview API to conduct real interviews with running simulation Agents!
+This is not LLM simulation — it calls the actual interview interface to get raw responses from simulation Agents.
+Interviews both Twitter and Reddit platforms simultaneously by default for a more comprehensive perspective.
 
-功能流程：
-1. 自动读取人设文件，了解所有模拟Agent
-2. 智能选择与采访主题最相关的Agent（如学生、媒体、官方等）
-3. 自动生成采访问题
-4. 调用 /api/simulation/interview/batch 接口在双平台进行真实采访
-5. 整合所有采访结果，提供多视角分析
+Workflow:
+1. Automatically reads persona files to understand all simulation Agents
+2. Intelligently selects Agents most relevant to the interview topic (e.g. students, media, officials)
+3. Automatically generates interview questions
+4. Calls /api/simulation/interview/batch to conduct real interviews on both platforms
+5. Integrates all interview results and provides multi-perspective analysis
 
-【使用场景】
-- 需要从不同角色视角了解事件看法（学生怎么看？媒体怎么看？官方怎么说？）
-- 需要收集多方意见和立场
-- 需要获取模拟Agent的真实回答（来自OASIS模拟环境）
-- 想让报告更生动，包含"采访实录"
+[Use Cases]
+- Understanding event perspectives from different roles (How do students see it? Media? Officials?)
+- Collecting opinions and positions from multiple parties
+- Getting authentic responses from simulation Agents (from the OASIS simulation environment)
+- Making reports more vivid by including "interview transcripts"
 
-【返回内容】
-- 被采访Agent的身份信息
-- 各Agent在Twitter和Reddit两个平台的采访回答
-- 关键引言（可直接引用）
-- 采访摘要和观点对比
+[Returns]
+- Identity information of interviewed Agents
+- Agent responses on both Twitter and Reddit platforms
+- Key quotes (directly quotable)
+- Interview summary and comparison of viewpoints
 
-【重要】需要OASIS模拟环境正在运行才能使用此功能！"""
+[Important] Requires the OASIS simulation environment to be running!"""
 
 # ── 大纲规划 prompt ──
 
