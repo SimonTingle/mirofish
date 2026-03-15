@@ -100,8 +100,13 @@ Click the image to watch MiroFish's deep prediction of the lost ending based on 
 | Tool | Version | Description | Check Installation |
 |------|---------|-------------|-------------------|
 | **Node.js** | 18+ | Frontend runtime, includes npm | `node -v` |
-| **Python** | ≥3.11, ≤3.12 | Backend runtime | `python --version` |
+| **Python** | ≥3.11, ≤3.12 | Backend runtime | `python3 --version` |
 | **uv** | Latest | Python package manager | `uv --version` |
+
+> **Installing `uv`:**
+> - macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+> - macOS (Homebrew): `brew install uv`
+> - Windows: `winget install --id=astral-sh.uv` or `pip install uv`
 
 #### 1. Configure Environment Variables
 
@@ -162,6 +167,10 @@ npm run backend   # Start backend only
 npm run frontend  # Start frontend only
 ```
 
+> **macOS Note — Port 5001 conflict (Monterey 12.x):**
+> macOS Monterey enables AirPlay Receiver on port 5001 by default, which will block the backend from starting.
+> To fix this, either disable AirPlay Receiver in **System Preferences → Sharing**, or add `FLASK_PORT=5002` to your `.env` file and access the backend at `http://localhost:5002`.
+
 ### Option 2: Docker Deployment
 
 ```bash
@@ -174,7 +183,9 @@ docker compose up -d
 
 Reads `.env` from root directory by default, maps ports `3000 (frontend) / 5001 (backend)`
 
-> Mirror address for faster pulling is provided as comments in `docker-compose.yml`, replace if needed.
+> **Apple Silicon (M-series) Mac — Docker:** The published image is built for `linux/amd64`. On M-series Macs, Docker Desktop will run it via Rosetta 2 emulation automatically, but performance may be reduced. For native arm64 performance, build the image locally: `docker build --platform linux/arm64 -t mirofish .`
+
+> Mirror image for faster pulling is available as a comment in `docker-compose.yml`.
 
 ## 📬 Join the Conversation
 
