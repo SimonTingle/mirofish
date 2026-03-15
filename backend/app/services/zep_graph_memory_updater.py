@@ -1,6 +1,6 @@
 """
-Zep图谱记忆更新服务
-将模拟中的Agent活动动态更新到Zep图谱中
+Zep Graph Memory Update Service
+Dynamically updates Agent activities from simulations into the Zep knowledge graph
 """
 
 import os
@@ -22,7 +22,7 @@ logger = get_logger('mirofish.zep_graph_memory_updater')
 
 @dataclass
 class AgentActivity:
-    """Agent活动记录"""
+    """Agent activity record"""
     platform: str           # twitter / reddit
     agent_id: int
     agent_name: str
@@ -30,15 +30,15 @@ class AgentActivity:
     action_args: Dict[str, Any]
     round_num: int
     timestamp: str
-    
+
     def to_episode_text(self) -> str:
         """
-        将活动转换为可以发送给Zep的文本描述
-        
-        采用自然语言描述格式，让Zep能够从中提取实体和关系
-        不添加模拟相关的前缀，避免误导图谱更新
+        Converts the activity into a text description suitable for sending to Zep.
+
+        Uses natural language format so Zep can extract entities and relationships.
+        Does not add simulation-related prefixes to avoid misleading graph updates.
         """
-        # 根据不同的动作类型生成不同的描述
+        # Generate different descriptions based on action type
         action_descriptions = {
             "CREATE_POST": self._describe_create_post,
             "LIKE_POST": self._describe_like_post,
@@ -56,8 +56,8 @@ class AgentActivity:
         
         describe_func = action_descriptions.get(self.action_type, self._describe_generic)
         description = describe_func()
-        
-        # 直接返回 "agent名称: 活动描述" 格式，不添加模拟前缀
+
+        # Return in "agent_name: activity_description" format without simulation prefix
         return f"{self.agent_name}: {description}"
     
     def _describe_create_post(self) -> str:

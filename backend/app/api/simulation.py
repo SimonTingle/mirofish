@@ -1,6 +1,6 @@
 """
-模拟相关API路由
-Step2: Zep实体读取与过滤、OASIS模拟准备与运行（全程自动化）
+Simulation-related API routes
+Step 2: Zep entity reading and filtering, OASIS simulation preparation and execution (fully automated)
 """
 
 import os
@@ -19,54 +19,54 @@ from ..models.project import ProjectManager
 logger = get_logger('mirofish.api.simulation')
 
 
-# Interview prompt 优化前缀
-# 添加此前缀可以避免Agent调用工具，直接用文本回复
+# Interview prompt optimization prefix
+# Adding this prefix prevents the Agent from calling tools and forces a direct text reply
 INTERVIEW_PROMPT_PREFIX = "结合你的人设、所有的过往记忆与行动，不调用任何工具直接用文本回复我："
 
 
 def optimize_interview_prompt(prompt: str) -> str:
     """
-    优化Interview提问，添加前缀避免Agent调用工具
-    
+    Optimize the interview prompt by adding a prefix to prevent the Agent from calling tools.
+
     Args:
-        prompt: 原始提问
-        
+        prompt: The original prompt
+
     Returns:
-        优化后的提问
+        The optimized prompt
     """
     if not prompt:
         return prompt
-    # 避免重复添加前缀
+    # Avoid adding the prefix more than once
     if prompt.startswith(INTERVIEW_PROMPT_PREFIX):
         return prompt
     return f"{INTERVIEW_PROMPT_PREFIX}{prompt}"
 
 
-# ============== 实体读取接口 ==============
+# ============== Entity retrieval endpoints ==============
 
 @simulation_bp.route('/entities/<graph_id>', methods=['GET'])
 def get_graph_entities(graph_id: str):
     """
-    获取图谱中的所有实体（已过滤）
-    
-    只返回符合预定义实体类型的节点（Labels不只是Entity的节点）
-    
-    Query参数：
-        entity_types: 逗号分隔的实体类型列表（可选，用于进一步过滤）
-        enrich: 是否获取相关边信息（默认true）
+    Retrieve all entities in the graph (filtered).
+
+    Only returns nodes that match predefined entity types (nodes whose Labels are not just 'Entity').
+
+    Query parameters:
+        entity_types: Comma-separated list of entity types (optional, for further filtering)
+        enrich: Whether to include related edge information (default true)
     """
     try:
         if not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,
-                "error": "ZEP_API_KEY未配置"
+                "error": "ZEP_API_KEY is not configured"
             }), 500
-        
+
         entity_types_str = request.args.get('entity_types', '')
         entity_types = [t.strip() for t in entity_types_str.split(',') if t.strip()] if entity_types_str else None
         enrich = request.args.get('enrich', 'true').lower() == 'true'
-        
-        logger.info(f"获取图谱实体: graph_id={graph_id}, entity_types={entity_types}, enrich={enrich}")
+
+        logger.info(f"Fetching graph entities: graph_id={graph_id}, entity_types={entity_types}, enrich={enrich}")
         
         reader = ZepEntityReader()
         result = reader.filter_defined_entities(
@@ -81,7 +81,7 @@ def get_graph_entities(graph_id: str):
         })
         
     except Exception as e:
-        logger.error(f"获取图谱实体失败: {str(e)}")
+        logger.error(f"Failed to retrieve graph entities: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -91,21 +91,21 @@ def get_graph_entities(graph_id: str):
 
 @simulation_bp.route('/entities/<graph_id>/<entity_uuid>', methods=['GET'])
 def get_entity_detail(graph_id: str, entity_uuid: str):
-    """获取单个实体的详细信息"""
+    """Retrieve detailed information for a single entity."""
     try:
         if not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,
-                "error": "ZEP_API_KEY未配置"
+                "error": "ZEP_API_KEY is not configured"
             }), 500
-        
+
         reader = ZepEntityReader()
         entity = reader.get_entity_with_context(graph_id, entity_uuid)
-        
+
         if not entity:
             return jsonify({
                 "success": False,
-                "error": f"实体不存在: {entity_uuid}"
+                "error": f"Entity not found: {entity_uuid}"
             }), 404
         
         return jsonify({
@@ -114,7 +114,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
         })
         
     except Exception as e:
-        logger.error(f"获取实体详情失败: {str(e)}")
+        logger.error(f"Failed to retrieve entity details: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -124,12 +124,12 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
 
 @simulation_bp.route('/entities/<graph_id>/by-type/<entity_type>', methods=['GET'])
 def get_entities_by_type(graph_id: str, entity_type: str):
-    """获取指定类型的所有实体"""
+    """Retrieve all entities of the specified type."""
     try:
         if not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,
-                "error": "ZEP_API_KEY未配置"
+                "error": "ZEP_API_KEY is not configured"
             }), 500
         
         enrich = request.args.get('enrich', 'true').lower() == 'true'
@@ -151,7 +151,7 @@ def get_entities_by_type(graph_id: str, entity_type: str):
         })
         
     except Exception as e:
-        logger.error(f"获取实体失败: {str(e)}")
+        logger.error(f"Failed to retrieve entities: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -159,24 +159,24 @@ def get_entities_by_type(graph_id: str, entity_type: str):
         }), 500
 
 
-# ============== 模拟管理接口 ==============
+# ============== Simulation management endpoints ==============
 
 @simulation_bp.route('/create', methods=['POST'])
 def create_simulation():
     """
-    创建新的模拟
-    
-    注意：max_rounds等参数由LLM智能生成，无需手动设置
-    
-    请求（JSON）：
+    Create a new simulation.
+
+    Note: Parameters such as max_rounds are generated intelligently by the LLM and do not need to be set manually.
+
+    Request (JSON):
         {
-            "project_id": "proj_xxxx",      // 必填
-            "graph_id": "mirofish_xxxx",    // 可选，如不提供则从project获取
-            "enable_twitter": true,          // 可选，默认true
-            "enable_reddit": true            // 可选，默认true
+            "project_id": "proj_xxxx",      // Required
+            "graph_id": "mirofish_xxxx",    // Optional; retrieved from the project if not provided
+            "enable_twitter": true,          // Optional, default true
+            "enable_reddit": true            // Optional, default true
         }
-    
-    返回：
+
+    Response:
         {
             "success": true,
             "data": {
@@ -197,21 +197,21 @@ def create_simulation():
         if not project_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 project_id"
+                "error": "Please provide project_id"
             }), 400
-        
+
         project = ProjectManager.get_project(project_id)
         if not project:
             return jsonify({
                 "success": False,
-                "error": f"项目不存在: {project_id}"
+                "error": f"Project not found: {project_id}"
             }), 404
-        
+
         graph_id = data.get('graph_id') or project.graph_id
         if not graph_id:
             return jsonify({
                 "success": False,
-                "error": "项目尚未构建图谱，请先调用 /api/graph/build"
+                "error": "The project does not have a graph yet. Please call /api/graph/build first."
             }), 400
         
         manager = SimulationManager()
@@ -228,7 +228,7 @@ def create_simulation():
         })
         
     except Exception as e:
-        logger.error(f"创建模拟失败: {str(e)}")
+        logger.error(f"Failed to create simulation: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -238,17 +238,17 @@ def create_simulation():
 
 def _check_simulation_prepared(simulation_id: str) -> tuple:
     """
-    检查模拟是否已经准备完成
-    
-    检查条件：
-    1. state.json 存在且 status 为 "ready"
-    2. 必要文件存在：reddit_profiles.json, twitter_profiles.csv, simulation_config.json
-    
-    注意：运行脚本(run_*.py)保留在 backend/scripts/ 目录，不再复制到模拟目录
-    
+    Check whether the simulation preparation is complete.
+
+    Conditions checked:
+    1. state.json exists and its status is "ready"
+    2. Required files exist: reddit_profiles.json, twitter_profiles.csv, simulation_config.json
+
+    Note: Run scripts (run_*.py) remain in the backend/scripts/ directory and are no longer copied to the simulation directory.
+
     Args:
-        simulation_id: 模拟ID
-        
+        simulation_id: Simulation ID
+
     Returns:
         (is_prepared: bool, info: dict)
     """
@@ -257,11 +257,11 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     
     simulation_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
     
-    # 检查目录是否存在
+    # Check if the simulation directory exists
     if not os.path.exists(simulation_dir):
-        return False, {"reason": "模拟目录不存在"}
-    
-    # 必要文件列表（不包括脚本，脚本位于 backend/scripts/）
+        return False, {"reason": "Simulation directory does not exist"}
+
+    # Required files list (excludes scripts, which reside in backend/scripts/)
     required_files = [
         "state.json",
         "simulation_config.json",
@@ -269,7 +269,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         "twitter_profiles.csv"
     ]
     
-    # 检查文件是否存在
+    # Check whether required files exist
     existing_files = []
     missing_files = []
     for f in required_files:
@@ -278,15 +278,15 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
             existing_files.append(f)
         else:
             missing_files.append(f)
-    
+
     if missing_files:
         return False, {
-            "reason": "缺少必要文件",
+            "reason": "Missing required files",
             "missing_files": missing_files,
             "existing_files": existing_files
         }
-    
-    # 检查state.json中的状态
+
+    # Check the status in state.json
     state_file = os.path.join(simulation_dir, "state.json")
     try:
         import json
@@ -296,17 +296,17 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         status = state_data.get("status", "")
         config_generated = state_data.get("config_generated", False)
         
-        # 详细日志
-        logger.debug(f"检测模拟准备状态: {simulation_id}, status={status}, config_generated={config_generated}")
-        
-        # 如果 config_generated=True 且文件存在，认为准备完成
-        # 以下状态都说明准备工作已完成：
-        # - ready: 准备完成，可以运行
-        # - preparing: 如果 config_generated=True 说明已完成
-        # - running: 正在运行，说明准备早就完成了
-        # - completed: 运行完成，说明准备早就完成了
-        # - stopped: 已停止，说明准备早就完成了
-        # - failed: 运行失败（但准备是完成的）
+        # Detailed logging
+        logger.debug(f"Checking simulation preparation status: {simulation_id}, status={status}, config_generated={config_generated}")
+
+        # If config_generated=True and the files exist, preparation is considered complete.
+        # The following statuses all indicate that preparation has been completed:
+        # - ready: preparation complete, can run
+        # - preparing: if config_generated=True, preparation is done
+        # - running: currently running, preparation was completed earlier
+        # - completed: run finished, preparation was completed earlier
+        # - stopped: stopped, preparation was completed earlier
+        # - failed: run failed (but preparation was completed)
         prepared_statuses = ["ready", "preparing", "running", "completed", "stopped", "failed"]
         if status in prepared_statuses and config_generated:
             # 获取文件统计信息
@@ -319,7 +319,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                     profiles_data = json.load(f)
                     profiles_count = len(profiles_data) if isinstance(profiles_data, list) else 0
             
-            # 如果状态是preparing但文件已完成，自动更新状态为ready
+            # If status is 'preparing' but files are complete, automatically update status to 'ready'
             if status == "preparing":
                 try:
                     state_data["status"] = "ready"
@@ -327,12 +327,12 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                     state_data["updated_at"] = datetime.now().isoformat()
                     with open(state_file, 'w', encoding='utf-8') as f:
                         json.dump(state_data, f, ensure_ascii=False, indent=2)
-                    logger.info(f"自动更新模拟状态: {simulation_id} preparing -> ready")
+                    logger.info(f"Auto-updated simulation status: {simulation_id} preparing -> ready")
                     status = "ready"
                 except Exception as e:
-                    logger.warning(f"自动更新状态失败: {e}")
-            
-            logger.info(f"模拟 {simulation_id} 检测结果: 已准备完成 (status={status}, config_generated={config_generated})")
+                    logger.warning(f"Failed to auto-update status: {e}")
+
+            logger.info(f"Simulation {simulation_id} check result: preparation complete (status={status}, config_generated={config_generated})")
             return True, {
                 "status": status,
                 "entities_count": state_data.get("entities_count", 0),
@@ -344,55 +344,55 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                 "existing_files": existing_files
             }
         else:
-            logger.warning(f"模拟 {simulation_id} 检测结果: 未准备完成 (status={status}, config_generated={config_generated})")
+            logger.warning(f"Simulation {simulation_id} check result: preparation not complete (status={status}, config_generated={config_generated})")
             return False, {
-                "reason": f"状态不在已准备列表中或config_generated为false: status={status}, config_generated={config_generated}",
+                "reason": f"Status is not in the prepared list or config_generated is false: status={status}, config_generated={config_generated}",
                 "status": status,
                 "config_generated": config_generated
             }
-            
+
     except Exception as e:
-        return False, {"reason": f"读取状态文件失败: {str(e)}"}
+        return False, {"reason": f"Failed to read state file: {str(e)}"}
 
 
 @simulation_bp.route('/prepare', methods=['POST'])
 def prepare_simulation():
     """
-    准备模拟环境（异步任务，LLM智能生成所有参数）
-    
-    这是一个耗时操作，接口会立即返回task_id，
-    使用 GET /api/simulation/prepare/status 查询进度
-    
-    特性：
-    - 自动检测已完成的准备工作，避免重复生成
-    - 如果已准备完成，直接返回已有结果
-    - 支持强制重新生成（force_regenerate=true）
-    
-    步骤：
-    1. 检查是否已有完成的准备工作
-    2. 从Zep图谱读取并过滤实体
-    3. 为每个实体生成OASIS Agent Profile（带重试机制）
-    4. LLM智能生成模拟配置（带重试机制）
-    5. 保存配置文件和预设脚本
-    
-    请求（JSON）：
+    Prepare the simulation environment (async task; all parameters are generated intelligently by the LLM).
+
+    This is a long-running operation. The endpoint returns a task_id immediately.
+    Use GET /api/simulation/prepare/status to poll for progress.
+
+    Features:
+    - Automatically detects completed preparation work to avoid re-generation
+    - If preparation is already complete, returns the existing result directly
+    - Supports forced re-generation (force_regenerate=true)
+
+    Steps:
+    1. Check whether preparation has already been completed
+    2. Read and filter entities from the Zep graph
+    3. Generate an OASIS Agent Profile for each entity (with retry logic)
+    4. Intelligently generate the simulation configuration using the LLM (with retry logic)
+    5. Save configuration files and preset scripts
+
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",                   // 必填，模拟ID
-            "entity_types": ["Student", "PublicFigure"],  // 可选，指定实体类型
-            "use_llm_for_profiles": true,                 // 可选，是否用LLM生成人设
-            "parallel_profile_count": 5,                  // 可选，并行生成人设数量，默认5
-            "force_regenerate": false                     // 可选，强制重新生成，默认false
+            "simulation_id": "sim_xxxx",                   // Required, simulation ID
+            "entity_types": ["Student", "PublicFigure"],  // Optional, specify entity types
+            "use_llm_for_profiles": true,                 // Optional, whether to generate profiles with LLM
+            "parallel_profile_count": 5,                  // Optional, parallel profile generation count, default 5
+            "force_regenerate": false                     // Optional, force re-generation, default false
         }
-    
-    返回：
+
+    Response:
         {
             "success": true,
             "data": {
                 "simulation_id": "sim_xxxx",
-                "task_id": "task_xxxx",           // 新任务时返回
+                "task_id": "task_xxxx",           // Returned when a new task is created
                 "status": "preparing|ready",
-                "message": "准备任务已启动|已有完成的准备工作",
-                "already_prepared": true|false    // 是否已准备完成
+                "message": "Preparation task started | Preparation already complete",
+                "already_prepared": true|false    // Whether preparation is already complete
             }
         }
     """
@@ -408,83 +408,83 @@ def prepare_simulation():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
-        
+
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
-        
+
         if not state:
             return jsonify({
                 "success": False,
-                "error": f"模拟不存在: {simulation_id}"
+                "error": f"Simulation not found: {simulation_id}"
             }), 404
-        
-        # 检查是否强制重新生成
+
+        # Check whether forced re-generation is requested
         force_regenerate = data.get('force_regenerate', False)
-        logger.info(f"开始处理 /prepare 请求: simulation_id={simulation_id}, force_regenerate={force_regenerate}")
-        
-        # 检查是否已经准备完成（避免重复生成）
+        logger.info(f"Processing /prepare request: simulation_id={simulation_id}, force_regenerate={force_regenerate}")
+
+        # Check whether preparation has already been completed (to avoid re-generation)
         if not force_regenerate:
-            logger.debug(f"检查模拟 {simulation_id} 是否已准备完成...")
+            logger.debug(f"Checking whether simulation {simulation_id} is already prepared...")
             is_prepared, prepare_info = _check_simulation_prepared(simulation_id)
-            logger.debug(f"检查结果: is_prepared={is_prepared}, prepare_info={prepare_info}")
+            logger.debug(f"Check result: is_prepared={is_prepared}, prepare_info={prepare_info}")
             if is_prepared:
-                logger.info(f"模拟 {simulation_id} 已准备完成，跳过重复生成")
+                logger.info(f"Simulation {simulation_id} is already prepared; skipping re-generation")
                 return jsonify({
                     "success": True,
                     "data": {
                         "simulation_id": simulation_id,
                         "status": "ready",
-                        "message": "已有完成的准备工作，无需重复生成",
+                        "message": "Preparation already complete; no re-generation needed",
                         "already_prepared": True,
                         "prepare_info": prepare_info
                     }
                 })
             else:
-                logger.info(f"模拟 {simulation_id} 未准备完成，将启动准备任务")
-        
-        # 从项目获取必要信息
+                logger.info(f"Simulation {simulation_id} is not prepared; starting preparation task")
+
+        # Retrieve required information from the project
         project = ProjectManager.get_project(state.project_id)
         if not project:
             return jsonify({
                 "success": False,
-                "error": f"项目不存在: {state.project_id}"
+                "error": f"Project not found: {state.project_id}"
             }), 404
-        
-        # 获取模拟需求
+
+        # Get the simulation requirement
         simulation_requirement = project.simulation_requirement or ""
         if not simulation_requirement:
             return jsonify({
                 "success": False,
-                "error": "项目缺少模拟需求描述 (simulation_requirement)"
+                "error": "The project is missing a simulation requirement description (simulation_requirement)"
             }), 400
-        
-        # 获取文档文本
+
+        # Get the document text
         document_text = ProjectManager.get_extracted_text(state.project_id) or ""
         
         entity_types_list = data.get('entity_types')
         use_llm_for_profiles = data.get('use_llm_for_profiles', True)
         parallel_profile_count = data.get('parallel_profile_count', 5)
         
-        # ========== 同步获取实体数量（在后台任务启动前） ==========
-        # 这样前端在调用prepare后立即就能获取到预期Agent总数
+        # ========== Synchronously fetch entity count (before starting background task) ==========
+        # This allows the frontend to know the expected total Agent count immediately after calling prepare
         try:
-            logger.info(f"同步获取实体数量: graph_id={state.graph_id}")
+            logger.info(f"Synchronously fetching entity count: graph_id={state.graph_id}")
             reader = ZepEntityReader()
-            # 快速读取实体（不需要边信息，只统计数量）
+            # Quick read of entities (no edge info needed, just count)
             filtered_preview = reader.filter_defined_entities(
                 graph_id=state.graph_id,
                 defined_entity_types=entity_types_list,
-                enrich_with_edges=False  # 不获取边信息，加快速度
+                enrich_with_edges=False  # Skip edge info for speed
             )
-            # 保存实体数量到状态（供前端立即获取）
+            # Save entity count to state (for immediate retrieval by the frontend)
             state.entities_count = filtered_preview.filtered_count
             state.entity_types = list(filtered_preview.entity_types)
-            logger.info(f"预期实体数量: {filtered_preview.filtered_count}, 类型: {filtered_preview.entity_types}")
+            logger.info(f"Expected entity count: {filtered_preview.filtered_count}, types: {filtered_preview.entity_types}")
         except Exception as e:
-            logger.warning(f"同步获取实体数量失败（将在后台任务中重试）: {e}")
-            # 失败不影响后续流程，后台任务会重新获取
+            logger.warning(f"Failed to synchronously fetch entity count (will retry in background task): {e}")
+            # Failure here does not block the rest of the flow; the background task will retry
         
         # 创建异步任务
         task_manager = TaskManager()
