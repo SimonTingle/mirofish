@@ -127,53 +127,53 @@ class EventConfig:
 
 @dataclass
 class PlatformConfig:
-    """平台特定配置"""
+    """Platform-specific configuration"""
     platform: str  # twitter or reddit
-    
-    # 推荐算法权重
-    recency_weight: float = 0.4  # 时间新鲜度
-    popularity_weight: float = 0.3  # 热度
-    relevance_weight: float = 0.3  # 相关性
-    
-    # 病毒传播阈值（达到多少互动后触发扩散）
+
+    # Recommendation algorithm weights
+    recency_weight: float = 0.4  # Recency/freshness
+    popularity_weight: float = 0.3  # Popularity
+    relevance_weight: float = 0.3  # Relevance
+
+    # Viral spread threshold (number of interactions before triggering diffusion)
     viral_threshold: int = 10
-    
-    # 回声室效应强度（相似观点聚集程度）
+
+    # Echo chamber effect intensity (degree of similar-opinion clustering)
     echo_chamber_strength: float = 0.5
 
 
 @dataclass
 class SimulationParameters:
-    """完整的模拟参数配置"""
-    # 基础信息
+    """Complete simulation parameter configuration"""
+    # Basic information
     simulation_id: str
     project_id: str
     graph_id: str
     simulation_requirement: str
-    
-    # 时间配置
+
+    # Time configuration
     time_config: TimeSimulationConfig = field(default_factory=TimeSimulationConfig)
-    
-    # Agent配置列表
+
+    # Agent configuration list
     agent_configs: List[AgentActivityConfig] = field(default_factory=list)
-    
-    # 事件配置
+
+    # Event configuration
     event_config: EventConfig = field(default_factory=EventConfig)
-    
-    # 平台配置
+
+    # Platform configuration
     twitter_config: Optional[PlatformConfig] = None
     reddit_config: Optional[PlatformConfig] = None
-    
-    # LLM配置
+
+    # LLM configuration
     llm_model: str = ""
     llm_base_url: str = ""
-    
-    # 生成元数据
+
+    # Generation metadata
     generated_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    generation_reasoning: str = ""  # LLM的推理说明
-    
+    generation_reasoning: str = ""  # LLM reasoning explanation
+
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
+        """Convert to dictionary"""
         time_dict = asdict(self.time_config)
         return {
             "simulation_id": self.simulation_id,
@@ -192,34 +192,34 @@ class SimulationParameters:
         }
     
     def to_json(self, indent: int = 2) -> str:
-        """转换为JSON字符串"""
+        """Convert to JSON string"""
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
 
 class SimulationConfigGenerator:
     """
-    模拟配置智能生成器
-    
-    使用LLM分析模拟需求、文档内容、图谱实体信息，
-    自动生成最佳的模拟参数配置
-    
-    采用分步生成策略：
-    1. 生成时间配置和事件配置（轻量级）
-    2. 分批生成Agent配置（每批10-20个）
-    3. 生成平台配置
+    Intelligent simulation configuration generator
+
+    Uses LLM to analyze simulation requirements, document content, and knowledge graph entity
+    information, and automatically generates the optimal simulation parameter configuration.
+
+    Adopts a step-by-step generation strategy:
+    1. Generate time configuration and event configuration (lightweight)
+    2. Generate Agent configurations in batches (10-20 per batch)
+    3. Generate platform configuration
     """
-    
-    # 上下文最大字符数
+
+    # Maximum context length in characters
     MAX_CONTEXT_LENGTH = 50000
-    # 每批生成的Agent数量
+    # Number of Agents generated per batch
     AGENTS_PER_BATCH = 15
-    
-    # 各步骤的上下文截断长度（字符数）
-    TIME_CONFIG_CONTEXT_LENGTH = 10000   # 时间配置
-    EVENT_CONFIG_CONTEXT_LENGTH = 8000   # 事件配置
-    ENTITY_SUMMARY_LENGTH = 300          # 实体摘要
-    AGENT_SUMMARY_LENGTH = 300           # Agent配置中的实体摘要
-    ENTITIES_PER_TYPE_DISPLAY = 20       # 每类实体显示数量
+
+    # Context truncation lengths for each step (in characters)
+    TIME_CONFIG_CONTEXT_LENGTH = 10000   # Time configuration
+    EVENT_CONFIG_CONTEXT_LENGTH = 8000   # Event configuration
+    ENTITY_SUMMARY_LENGTH = 300          # Entity summary
+    AGENT_SUMMARY_LENGTH = 300           # Entity summary in Agent configuration
+    ENTITIES_PER_TYPE_DISPLAY = 20       # Number of entities displayed per type
     
     def __init__(
         self,
@@ -232,7 +232,7 @@ class SimulationConfigGenerator:
         self.model_name = model_name or Config.LLM_MODEL_NAME
         
         if not self.api_key:
-            raise ValueError("LLM_API_KEY 未配置")
+            raise ValueError("LLM_API_KEY is not configured")
         
         self.client = OpenAI(
             api_key=self.api_key,
