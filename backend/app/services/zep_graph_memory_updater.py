@@ -428,8 +428,8 @@ class ZepGraphMemoryUpdater:
                     self._failed_count += 1
     
     def _flush_remaining(self):
-        """发送队列和缓冲区中剩余的活动"""
-        # 首先处理队列中剩余的活动，添加到缓冲区
+        """Send remaining activities from the queue and buffers"""
+        # First drain remaining activities from the queue into buffers
         while not self._activity_queue.empty():
             try:
                 activity = self._activity_queue.get_nowait()
@@ -440,110 +440,110 @@ class ZepGraphMemoryUpdater:
                     self._platform_buffers[platform].append(activity)
             except Empty:
                 break
-        
-        # 然后发送各平台缓冲区中剩余的活动（即使不足BATCH_SIZE条）
+
+        # Then send remaining activities in each platform's buffer (even if under BATCH_SIZE)
         with self._buffer_lock:
             for platform, buffer in self._platform_buffers.items():
                 if buffer:
                     display_name = self._get_platform_display_name(platform)
-                    logger.info(f"发送{display_name}平台剩余的 {len(buffer)} 条活动")
+                    logger.info(f"Sending {len(buffer)} remaining activities for platform {display_name}")
                     self._send_batch_activities(buffer, platform)
-            # 清空所有缓冲区
+            # Clear all buffers
             for platform in self._platform_buffers:
                 self._platform_buffers[platform] = []
-    
+
     def get_stats(self) -> Dict[str, Any]:
-        """获取统计信息"""
+        """Get statistics"""
         with self._buffer_lock:
             buffer_sizes = {p: len(b) for p, b in self._platform_buffers.items()}
-        
+
         return {
             "graph_id": self.graph_id,
             "batch_size": self.BATCH_SIZE,
-            "total_activities": self._total_activities,  # 添加到队列的活动总数
-            "batches_sent": self._total_sent,            # 成功发送的批次数
-            "items_sent": self._total_items_sent,        # 成功发送的活动条数
-            "failed_count": self._failed_count,          # 发送失败的批次数
-            "skipped_count": self._skipped_count,        # 被过滤跳过的活动数（DO_NOTHING）
+            "total_activities": self._total_activities,  # Total activities added to queue
+            "batches_sent": self._total_sent,            # Successfully sent batches
+            "items_sent": self._total_items_sent,        # Successfully sent activity items
+            "failed_count": self._failed_count,          # Failed batch sends
+            "skipped_count": self._skipped_count,        # Filtered/skipped activities (DO_NOTHING)
             "queue_size": self._activity_queue.qsize(),
-            "buffer_sizes": buffer_sizes,                # 各平台缓冲区大小
+            "buffer_sizes": buffer_sizes,                # Per-platform buffer sizes
             "running": self._running,
         }
 
 
 class ZepGraphMemoryManager:
     """
-    管理多个模拟的Zep图谱记忆更新器
-    
-    每个模拟可以有自己的更新器实例
+    Manages Zep graph memory updaters for multiple simulations.
+
+    Each simulation can have its own updater instance.
     """
-    
+
     _updaters: Dict[str, ZepGraphMemoryUpdater] = {}
     _lock = threading.Lock()
-    
+
     @classmethod
     def create_updater(cls, simulation_id: str, graph_id: str) -> ZepGraphMemoryUpdater:
         """
-        为模拟创建图谱记忆更新器
-        
+        Create a graph memory updater for a simulation.
+
         Args:
-            simulation_id: 模拟ID
-            graph_id: Zep图谱ID
-            
+            simulation_id: Simulation ID
+            graph_id: Zep graph ID
+
         Returns:
-            ZepGraphMemoryUpdater实例
+            ZepGraphMemoryUpdater instance
         """
         with cls._lock:
-            # 如果已存在，先停止旧的
+            # If one already exists, stop the old one first
             if simulation_id in cls._updaters:
                 cls._updaters[simulation_id].stop()
-            
+
             updater = ZepGraphMemoryUpdater(graph_id)
             updater.start()
             cls._updaters[simulation_id] = updater
-            
-            logger.info(f"创建图谱记忆更新器: simulation_id={simulation_id}, graph_id={graph_id}")
+
+            logger.info(f"Created graph memory updater: simulation_id={simulation_id}, graph_id={graph_id}")
             return updater
-    
+
     @classmethod
     def get_updater(cls, simulation_id: str) -> Optional[ZepGraphMemoryUpdater]:
-        """获取模拟的更新器"""
+        """Get the updater for a simulation"""
         return cls._updaters.get(simulation_id)
-    
+
     @classmethod
     def stop_updater(cls, simulation_id: str):
-        """停止并移除模拟的更新器"""
+        """Stop and remove the updater for a simulation"""
         with cls._lock:
             if simulation_id in cls._updaters:
                 cls._updaters[simulation_id].stop()
                 del cls._updaters[simulation_id]
-                logger.info(f"已停止图谱记忆更新器: simulation_id={simulation_id}")
-    
-    # 防止 stop_all 重复调用的标志
+                logger.info(f"Stopped graph memory updater: simulation_id={simulation_id}")
+
+    # Flag to prevent stop_all from being called multiple times
     _stop_all_done = False
-    
+
     @classmethod
     def stop_all(cls):
-        """停止所有更新器"""
-        # 防止重复调用
+        """Stop all updaters"""
+        # Prevent duplicate calls
         if cls._stop_all_done:
             return
         cls._stop_all_done = True
-        
+
         with cls._lock:
             if cls._updaters:
                 for simulation_id, updater in list(cls._updaters.items()):
                     try:
                         updater.stop()
                     except Exception as e:
-                        logger.error(f"停止更新器失败: simulation_id={simulation_id}, error={e}")
+                        logger.error(f"Failed to stop updater: simulation_id={simulation_id}, error={e}")
                 cls._updaters.clear()
-            logger.info("已停止所有图谱记忆更新器")
-    
+            logger.info("All graph memory updaters stopped")
+
     @classmethod
     def get_all_stats(cls) -> Dict[str, Dict[str, Any]]:
-        """获取所有更新器的统计信息"""
+        """Get statistics for all updaters"""
         return {
-            sim_id: updater.get_stats() 
+            sim_id: updater.get_stats()
             for sim_id, updater in cls._updaters.items()
         }

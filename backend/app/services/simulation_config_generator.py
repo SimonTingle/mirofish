@@ -1,13 +1,13 @@
 """
-模拟配置智能生成器
-使用LLM根据模拟需求、文档内容、图谱信息自动生成细致的模拟参数
-实现全程自动化，无需人工设置参数
+Intelligent simulation configuration generator
+Uses LLM to automatically generate detailed simulation parameters based on simulation requirements,
+document content, and knowledge graph information. Achieves full automation without manual parameter tuning.
 
-采用分步生成策略，避免一次性生成过长内容导致失败：
-1. 生成时间配置
-2. 生成事件配置
-3. 分批生成Agent配置
-4. 生成平台配置
+Adopts a step-by-step generation strategy to avoid failures from generating overly long content at once:
+1. Generate time configuration
+2. Generate event configuration
+3. Generate Agent configurations in batches
+4. Generate platform configuration
 """
 
 import json
@@ -24,104 +24,104 @@ from .zep_entity_reader import EntityNode, ZepEntityReader
 
 logger = get_logger('mirofish.simulation_config')
 
-# 中国作息时间配置（北京时间）
+# China daily schedule time configuration (Beijing Time)
 CHINA_TIMEZONE_CONFIG = {
-    # 深夜时段（几乎无人活动）
+    # Late-night hours (almost no activity)
     "dead_hours": [0, 1, 2, 3, 4, 5],
-    # 早间时段（逐渐醒来）
+    # Morning hours (gradually waking up)
     "morning_hours": [6, 7, 8],
-    # 工作时段
+    # Work hours
     "work_hours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-    # 晚间高峰（最活跃）
+    # Evening peak (most active)
     "peak_hours": [19, 20, 21, 22],
-    # 夜间时段（活跃度下降）
+    # Night hours (activity declining)
     "night_hours": [23],
-    # 活跃度系数
+    # Activity multipliers
     "activity_multipliers": {
-        "dead": 0.05,      # 凌晨几乎无人
-        "morning": 0.4,    # 早间逐渐活跃
-        "work": 0.7,       # 工作时段中等
-        "peak": 1.5,       # 晚间高峰
-        "night": 0.5       # 深夜下降
+        "dead": 0.05,      # Almost no one active in the early morning
+        "morning": 0.4,    # Gradually becoming active in the morning
+        "work": 0.7,       # Moderate activity during work hours
+        "peak": 1.5,       # Evening peak
+        "night": 0.5       # Activity drops late at night
     }
 }
 
 
 @dataclass
 class AgentActivityConfig:
-    """单个Agent的活动配置"""
+    """Activity configuration for a single Agent"""
     agent_id: int
     entity_uuid: str
     entity_name: str
     entity_type: str
-    
-    # 活跃度配置 (0.0-1.0)
-    activity_level: float = 0.5  # 整体活跃度
-    
-    # 发言频率（每小时预期发言次数）
+
+    # Activity level configuration (0.0-1.0)
+    activity_level: float = 0.5  # Overall activity level
+
+    # Post frequency (expected posts per hour)
     posts_per_hour: float = 1.0
     comments_per_hour: float = 2.0
-    
-    # 活跃时间段（24小时制，0-23）
+
+    # Active time slots (24-hour format, 0-23)
     active_hours: List[int] = field(default_factory=lambda: list(range(8, 23)))
-    
-    # 响应速度（对热点事件的反应延迟，单位：模拟分钟）
+
+    # Response speed (reaction delay to trending events, in simulated minutes)
     response_delay_min: int = 5
     response_delay_max: int = 60
-    
-    # 情感倾向 (-1.0到1.0，负面到正面)
+
+    # Sentiment bias (-1.0 to 1.0, negative to positive)
     sentiment_bias: float = 0.0
-    
-    # 立场（对特定话题的态度）
+
+    # Stance (attitude toward a specific topic)
     stance: str = "neutral"  # supportive, opposing, neutral, observer
-    
-    # 影响力权重（决定其发言被其他Agent看到的概率）
+
+    # Influence weight (determines the probability of their posts being seen by other Agents)
     influence_weight: float = 1.0
 
 
-@dataclass  
+@dataclass
 class TimeSimulationConfig:
-    """时间模拟配置（基于中国人作息习惯）"""
-    # 模拟总时长（模拟小时数）
-    total_simulation_hours: int = 72  # 默认模拟72小时（3天）
-    
-    # 每轮代表的时间（模拟分钟）- 默认60分钟（1小时），加快时间流速
+    """Time simulation configuration (based on Chinese daily schedule habits)"""
+    # Total simulation duration (simulated hours)
+    total_simulation_hours: int = 72  # Default: simulate 72 hours (3 days)
+
+    # Time represented by each round (simulated minutes) - default 60 minutes (1 hour) to speed up time flow
     minutes_per_round: int = 60
-    
-    # 每小时激活的Agent数量范围
+
+    # Range of Agents activated per hour
     agents_per_hour_min: int = 5
     agents_per_hour_max: int = 20
-    
-    # 高峰时段（晚间19-22点，中国人最活跃的时间）
+
+    # Peak hours (evening 19-22, the most active time for Chinese users)
     peak_hours: List[int] = field(default_factory=lambda: [19, 20, 21, 22])
     peak_activity_multiplier: float = 1.5
-    
-    # 低谷时段（凌晨0-5点，几乎无人活动）
+
+    # Off-peak hours (midnight 0-5, almost no activity)
     off_peak_hours: List[int] = field(default_factory=lambda: [0, 1, 2, 3, 4, 5])
-    off_peak_activity_multiplier: float = 0.05  # 凌晨活跃度极低
-    
-    # 早间时段
+    off_peak_activity_multiplier: float = 0.05  # Extremely low activity in the early morning
+
+    # Morning hours
     morning_hours: List[int] = field(default_factory=lambda: [6, 7, 8])
     morning_activity_multiplier: float = 0.4
-    
-    # 工作时段
+
+    # Work hours
     work_hours: List[int] = field(default_factory=lambda: [9, 10, 11, 12, 13, 14, 15, 16, 17, 18])
     work_activity_multiplier: float = 0.7
 
 
 @dataclass
 class EventConfig:
-    """事件配置"""
-    # 初始事件（模拟开始时的触发事件）
+    """Event configuration"""
+    # Initial events (trigger events at the start of the simulation)
     initial_posts: List[Dict[str, Any]] = field(default_factory=list)
-    
-    # 定时事件（在特定时间触发的事件）
+
+    # Scheduled events (events triggered at specific times)
     scheduled_events: List[Dict[str, Any]] = field(default_factory=list)
-    
-    # 热点话题关键词
+
+    # Trending topic keywords
     hot_topics: List[str] = field(default_factory=list)
-    
-    # 舆论引导方向
+
+    # Public opinion guidance direction
     narrative_direction: str = ""
 
 

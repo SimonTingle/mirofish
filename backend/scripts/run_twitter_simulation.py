@@ -1,16 +1,16 @@
 """
-OASIS Twitter模拟预设脚本
-此脚本读取配置文件中的参数来执行模拟，实现全程自动化
+OASIS Twitter Simulation Preset Script
+This script reads parameters from a config file to execute the simulation, achieving full automation.
 
-功能特性:
-- 完成模拟后不立即关闭环境，进入等待命令模式
-- 支持通过IPC接收Interview命令
-- 支持单个Agent采访和批量采访
-- 支持远程关闭环境命令
+Features:
+- Does not immediately close the environment after simulation; enters command-waiting mode
+- Supports receiving Interview commands via IPC
+- Supports single Agent interviews and batch interviews
+- Supports remote environment close command
 
-使用方式:
+Usage:
     python run_twitter_simulation.py --config /path/to/simulation_config.json
-    python run_twitter_simulation.py --config /path/to/simulation_config.json --no-wait  # 完成后立即关闭
+    python run_twitter_simulation.py --config /path/to/simulation_config.json --no-wait  # close immediately after completion
 """
 
 import argparse
@@ -25,18 +25,18 @@ import sqlite3
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
-# 全局变量：用于信号处理
+# Global variables: used for signal handling
 _shutdown_event = None
 _cleanup_done = False
 
-# 添加项目路径
+# Add project path
 _scripts_dir = os.path.dirname(os.path.abspath(__file__))
 _backend_dir = os.path.abspath(os.path.join(_scripts_dir, '..'))
 _project_root = os.path.abspath(os.path.join(_backend_dir, '..'))
 sys.path.insert(0, _scripts_dir)
 sys.path.insert(0, _backend_dir)
 
-# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）
+# Load the .env file from the project root directory (contains LLM_API_KEY and other config)
 from dotenv import load_dotenv
 _env_file = os.path.join(_project_root, '.env')
 if os.path.exists(_env_file):
@@ -51,7 +51,7 @@ import re
 
 
 class UnicodeFormatter(logging.Formatter):
-    """自定义格式化器，将 Unicode 转义序列转换为可读字符"""
+    """Custom formatter that converts Unicode escape sequences to readable characters"""
     
     UNICODE_ESCAPE_PATTERN = re.compile(r'\\u([0-9a-fA-F]{4})')
     
@@ -68,24 +68,24 @@ class UnicodeFormatter(logging.Formatter):
 
 
 class MaxTokensWarningFilter(logging.Filter):
-    """过滤掉 camel-ai 关于 max_tokens 的警告（我们故意不设置 max_tokens，让模型自行决定）"""
-    
+    """Filter out camel-ai warnings about max_tokens (we intentionally do not set max_tokens, letting the model decide)"""
+
     def filter(self, record):
-        # 过滤掉包含 max_tokens 警告的日志
+        # Filter out log entries containing max_tokens warnings
         if "max_tokens" in record.getMessage() and "Invalid or missing" in record.getMessage():
             return False
         return True
 
 
-# 在模块加载时立即添加过滤器，确保在 camel 代码执行前生效
+# Add the filter immediately at module load time, ensuring it takes effect before camel code executes
 logging.getLogger().addFilter(MaxTokensWarningFilter())
 
 
 def setup_oasis_logging(log_dir: str):
-    """配置 OASIS 的日志，使用固定名称的日志文件"""
+    """Configure OASIS logging using fixed-name log files"""
     os.makedirs(log_dir, exist_ok=True)
-    
-    # 清理旧的日志文件
+
+    # Clean up old log files
     for f in os.listdir(log_dir):
         old_log = os.path.join(log_dir, f)
         if os.path.isfile(old_log) and f.endswith('.log'):
@@ -126,26 +126,26 @@ try:
         generate_twitter_agent_graph
     )
 except ImportError as e:
-    print(f"错误: 缺少依赖 {e}")
-    print("请先安装: pip install oasis-ai camel-ai")
+    print(f"Error: missing dependency {e}")
+    print("Please install first: pip install oasis-ai camel-ai")
     sys.exit(1)
 
 
-# IPC相关常量
+# IPC-related constants
 IPC_COMMANDS_DIR = "ipc_commands"
 IPC_RESPONSES_DIR = "ipc_responses"
 ENV_STATUS_FILE = "env_status.json"
 
 class CommandType:
-    """命令类型常量"""
+    """Command type constants"""
     INTERVIEW = "interview"
     BATCH_INTERVIEW = "batch_interview"
     CLOSE_ENV = "close_env"
 
 
 class IPCHandler:
-    """IPC命令处理器"""
-    
+    """IPC command handler"""
+
     def __init__(self, simulation_dir: str, env, agent_graph):
         self.simulation_dir = simulation_dir
         self.env = env
@@ -154,13 +154,13 @@ class IPCHandler:
         self.responses_dir = os.path.join(simulation_dir, IPC_RESPONSES_DIR)
         self.status_file = os.path.join(simulation_dir, ENV_STATUS_FILE)
         self._running = True
-        
-        # 确保目录存在
+
+        # Ensure directories exist
         os.makedirs(self.commands_dir, exist_ok=True)
         os.makedirs(self.responses_dir, exist_ok=True)
     
     def update_status(self, status: str):
-        """更新环境状态"""
+        """Update environment status"""
         with open(self.status_file, 'w', encoding='utf-8') as f:
             json.dump({
                 "status": status,

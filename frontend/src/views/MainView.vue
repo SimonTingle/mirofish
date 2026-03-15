@@ -171,7 +171,7 @@ const handleNextStep = (params = {}) => {
 const handleGoBack = () => {
   if (currentStep.value > 1) {
     currentStep.value--
-    addLog(`返回 Step ${currentStep.value}: ${stepNames[currentStep.value - 1]}`)
+    addLog(`Returned to Step ${currentStep.value}: ${stepNames[currentStep.value - 1]}`)
   }
 }
 
