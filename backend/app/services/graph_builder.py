@@ -1,6 +1,6 @@
 """
-图谱构建服务
-接口2：使用Zep API构建Standalone Graph
+Graph construction service
+Interface 2: Build a Standalone Graph using the Zep API
 """
 
 import os
@@ -21,7 +21,7 @@ from .text_processor import TextProcessor
 
 @dataclass
 class GraphInfo:
-    """图谱信息"""
+    """Graph information"""
     graph_id: str
     node_count: int
     edge_count: int
@@ -38,14 +38,14 @@ class GraphInfo:
 
 class GraphBuilderService:
     """
-    图谱构建服务
-    负责调用Zep API构建知识图谱
+    Graph construction service
+    Responsible for calling the Zep API to build a knowledge graph
     """
-    
+
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or Config.ZEP_API_KEY
         if not self.api_key:
-            raise ValueError("ZEP_API_KEY 未配置")
+            raise ValueError("ZEP_API_KEY is not configured")
         
         self.client = Zep(api_key=self.api_key)
         self.task_manager = TaskManager()
@@ -60,20 +60,20 @@ class GraphBuilderService:
         batch_size: int = 3
     ) -> str:
         """
-        异步构建图谱
-        
+        Asynchronously build the graph
+
         Args:
-            text: 输入文本
-            ontology: 本体定义（来自接口1的输出）
-            graph_name: 图谱名称
-            chunk_size: 文本块大小
-            chunk_overlap: 块重叠大小
-            batch_size: 每批发送的块数量
-            
+            text: Input text
+            ontology: Ontology definition (output from interface 1)
+            graph_name: Graph name
+            chunk_size: Text chunk size
+            chunk_overlap: Chunk overlap size
+            batch_size: Number of chunks to send per batch
+
         Returns:
-            任务ID
+            Task ID
         """
-        # 创建任务
+        # Create task
         task_id = self.task_manager.create_task(
             task_type="graph_build",
             metadata={
@@ -82,8 +82,8 @@ class GraphBuilderService:
                 "text_length": len(text),
             }
         )
-        
-        # 在后台线程中执行构建
+
+        # Execute build in a background thread
         thread = threading.Thread(
             target=self._build_graph_worker,
             args=(task_id, text, ontology, graph_name, chunk_size, chunk_overlap, batch_size)
@@ -103,41 +103,41 @@ class GraphBuilderService:
         chunk_overlap: int,
         batch_size: int
     ):
-        """图谱构建工作线程"""
+        """Graph construction worker thread"""
         try:
             self.task_manager.update_task(
                 task_id,
                 status=TaskStatus.PROCESSING,
                 progress=5,
-                message="开始构建图谱..."
+                message="Starting graph construction..."
             )
-            
-            # 1. 创建图谱
+
+            # 1. Create graph
             graph_id = self.create_graph(graph_name)
             self.task_manager.update_task(
                 task_id,
                 progress=10,
-                message=f"图谱已创建: {graph_id}"
+                message=f"Graph created: {graph_id}"
             )
-            
-            # 2. 设置本体
+
+            # 2. Set ontology
             self.set_ontology(graph_id, ontology)
             self.task_manager.update_task(
                 task_id,
                 progress=15,
-                message="本体已设置"
+                message="Ontology configured"
             )
-            
-            # 3. 文本分块
+
+            # 3. Split text into chunks
             chunks = TextProcessor.split_text(text, chunk_size, chunk_overlap)
             total_chunks = len(chunks)
             self.task_manager.update_task(
                 task_id,
                 progress=20,
-                message=f"文本已分割为 {total_chunks} 个块"
+                message=f"Text split into {total_chunks} chunks"
             )
-            
-            # 4. 分批发送数据
+
+            # 4. Send data in batches
             episode_uuids = self.add_text_batches(
                 graph_id, chunks, batch_size,
                 lambda msg, prog: self.task_manager.update_task(
@@ -146,14 +146,14 @@ class GraphBuilderService:
                     message=msg
                 )
             )
-            
-            # 5. 等待Zep处理完成
+
+            # 5. Wait for Zep processing to complete
             self.task_manager.update_task(
                 task_id,
                 progress=60,
-                message="等待Zep处理数据..."
+                message="Waiting for Zep to process data..."
             )
-            
+
             self._wait_for_episodes(
                 episode_uuids,
                 lambda msg, prog: self.task_manager.update_task(
@@ -162,17 +162,17 @@ class GraphBuilderService:
                     message=msg
                 )
             )
-            
-            # 6. 获取图谱信息
+
+            # 6. Retrieve graph information
             self.task_manager.update_task(
                 task_id,
                 progress=90,
-                message="获取图谱信息..."
+                message="Retrieving graph information..."
             )
-            
+
             graph_info = self._get_graph_info(graph_id)
-            
-            # 完成
+
+            # Complete
             self.task_manager.complete_task(task_id, {
                 "graph_id": graph_id,
                 "graph_info": graph_info.to_dict(),
@@ -185,7 +185,7 @@ class GraphBuilderService:
             self.task_manager.fail_task(task_id, error_msg)
     
     def create_graph(self, name: str) -> str:
-        """创建Zep图谱（公开方法）"""
+        """Create a Zep graph (public method)"""
         graph_id = f"mirofish_{uuid.uuid4().hex[:16]}"
         
         self.client.graph.create(

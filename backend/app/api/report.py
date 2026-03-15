@@ -1,6 +1,6 @@
 """
-Report API路由
-提供模拟报告生成、获取、对话等接口
+Report API routes
+Provides endpoints for generating, retrieving, and chatting about simulation reports
 """
 
 import os
@@ -19,30 +19,30 @@ from ..utils.logger import get_logger
 logger = get_logger('mirofish.api.report')
 
 
-# ============== 报告生成接口 ==============
+# ============== Report generation endpoints ==============
 
 @report_bp.route('/generate', methods=['POST'])
 def generate_report():
     """
-    生成模拟分析报告（异步任务）
-    
-    这是一个耗时操作，接口会立即返回task_id，
-    使用 GET /api/report/generate/status 查询进度
-    
-    请求（JSON）：
+    Generate a simulation analysis report (asynchronous task).
+
+    This is a long-running operation. The endpoint returns a task_id immediately.
+    Use GET /api/report/generate/status to poll for progress.
+
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",    // 必填，模拟ID
-            "force_regenerate": false        // 可选，强制重新生成
+            "simulation_id": "sim_xxxx",    // required, simulation ID
+            "force_regenerate": false        // optional, force regeneration
         }
-    
-    返回：
+
+    Response:
         {
             "success": true,
             "data": {
                 "simulation_id": "sim_xxxx",
                 "task_id": "task_xxxx",
                 "status": "generating",
-                "message": "报告生成任务已启动"
+                "message": "Report generation task started"
             }
         }
     """
@@ -53,22 +53,22 @@ def generate_report():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
         
         force_regenerate = data.get('force_regenerate', False)
         
-        # 获取模拟信息
+        # Retrieve simulation info
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
         
         if not state:
             return jsonify({
                 "success": False,
-                "error": f"模拟不存在: {simulation_id}"
+                "error": f"Simulation not found: {simulation_id}"
             }), 404
-        
-        # 检查是否已有报告
+
+        # Check if a report already exists
         if not force_regenerate:
             existing_report = ReportManager.get_report_by_simulation(simulation_id)
             if existing_report and existing_report.status == ReportStatus.COMPLETED:
@@ -78,38 +78,38 @@ def generate_report():
                         "simulation_id": simulation_id,
                         "report_id": existing_report.report_id,
                         "status": "completed",
-                        "message": "报告已存在",
+                        "message": "Report already exists",
                         "already_generated": True
                     }
                 })
         
-        # 获取项目信息
+        # Retrieve project info
         project = ProjectManager.get_project(state.project_id)
         if not project:
             return jsonify({
                 "success": False,
-                "error": f"项目不存在: {state.project_id}"
+                "error": f"Project not found: {state.project_id}"
             }), 404
-        
+
         graph_id = state.graph_id or project.graph_id
         if not graph_id:
             return jsonify({
                 "success": False,
-                "error": "缺少图谱ID，请确保已构建图谱"
+                "error": "Graph ID is missing. Please ensure the graph has been built."
             }), 400
-        
+
         simulation_requirement = project.simulation_requirement
         if not simulation_requirement:
             return jsonify({
                 "success": False,
-                "error": "缺少模拟需求描述"
+                "error": "Simulation requirement description is missing"
             }), 400
-        
-        # 提前生成 report_id，以便立即返回给前端
+
+        # Generate report_id in advance so it can be returned to the frontend immediately
         import uuid
         report_id = f"report_{uuid.uuid4().hex[:12]}"
         
-        # 创建异步任务
+        # Create an asynchronous task
         task_manager = TaskManager()
         task_id = task_manager.create_task(
             task_type="report_generate",
@@ -501,7 +501,7 @@ def chat_with_report_agent():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
         
         if not message:

@@ -2251,7 +2251,7 @@ def interview_agent():
     except TimeoutError as e:
         return jsonify({
             "success": False,
-            "error": f"等待Interview响应超时: {str(e)}"
+            "error": f"Timed out waiting for interview response: {str(e)}"
         }), 504
         
     except Exception as e:
@@ -2389,7 +2389,7 @@ def interview_agents_batch():
     except TimeoutError as e:
         return jsonify({
             "success": False,
-            "error": f"等待批量Interview响应超时: {str(e)}"
+            "error": f"Timed out waiting for batch interview responses: {str(e)}"
         }), 504
 
     except Exception as e:
@@ -2492,7 +2492,7 @@ def interview_all_agents():
     except TimeoutError as e:
         return jsonify({
             "success": False,
-            "error": f"等待全局Interview响应超时: {str(e)}"
+            "error": f"Timed out waiting for global interview response: {str(e)}"
         }), 504
 
     except Exception as e:

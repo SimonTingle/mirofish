@@ -1,6 +1,6 @@
 """
-本体生成服务
-接口1：分析文本内容，生成适合社会模拟的实体和关系类型定义
+Ontology generation service
+Interface 1: Analyzes text content and generates entity and relationship type definitions suitable for social simulation
 """
 
 import json
