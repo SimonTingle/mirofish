@@ -1,0 +1,65 @@
+services:
+  # ─── Backend: Flask API ────────────────────────────────────────────────────
+  - type: web
+    name: mirofish-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install uv && cd backend && uv sync --frozen
+    startCommand: cd backend && uv run python run.py
+    # Render injects PORT=10000 by default; we map it to FLASK_PORT below.
+    envVars:
+      # --- Required: set these in the Render dashboard ---
+      - key: LLM_API_KEY
+        sync: false
+      - key: ZEP_API_KEY
+        sync: false
+
+      # --- LLM defaults (override in dashboard if needed) ---
+      - key: LLM_BASE_URL
+        value: https://api.openai.com/v1
+      - key: LLM_MODEL_NAME
+        value: gpt-4o-mini
+
+      # --- Optional: secondary/accelerated LLM ---
+      # - key: LLM_BOOST_API_KEY
+      #   sync: false
+      # - key: LLM_BOOST_BASE_URL
+      #   sync: false
+      # - key: LLM_BOOST_MODEL_NAME
+      #   sync: false
+
+      # --- Flask runtime ---
+      - key: FLASK_HOST
+        value: 0.0.0.0
+      - key: FLASK_PORT
+        value: 10000          # Must match Render's expected port
+      - key: FLASK_DEBUG
+        value: false
+      - key: SECRET_KEY
+        generateValue: true   # Render auto-generates a secure random value
+
+    # Persistent disk for uploaded files (requires a paid plan; remove if using free plan)
+    # disk:
+    #   name: uploads
+    #   mountPath: /app/backend/uploads
+    #   sizeGB: 1
+
+  # ─── Frontend: Vue.js Static Site ─────────────────────────────────────────
+  - type: web
+    name: mirofish-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    buildCommand: npm ci --prefix frontend && cd frontend && npm run build
+    staticPublishPath: ./frontend/dist
+    # Route all paths to index.html for Vue Router (SPA)
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Set this to your backend URL: https://mirofish-backend.onrender.com
+      # This is a BUILD-TIME variable — set it before triggering a deploy.
+      - key: VITE_API_BASE_URL
+        sync: false
